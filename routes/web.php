@@ -18,6 +18,7 @@ use App\Http\Controllers\App\InventoryController;
 use App\Http\Controllers\App\PosCounterController;
 use App\Http\Controllers\App\ProductController;
 use App\Http\Controllers\App\RoleController;
+use App\Http\Controllers\App\StockTransferController;
 use App\Http\Controllers\App\UnitController;
 use App\Http\Controllers\Auth\AdminLoginController;
 use App\Http\Controllers\Auth\BusinessLoginController;
@@ -165,6 +166,24 @@ Route::middleware('tenant.app')
 
         Route::post('inventory/adjust', [InventoryController::class, 'adjust'])
             ->middleware('permission:inventory.adjust')->name('inventory.adjust');
+
+        // ---- stock transfers (#32) ------------------------------------------
+        // One permission covers the whole workflow; WHICH end of a transfer a
+        // person may act on is decided per action by the service, because
+        // sending is the source branch's job and receiving is the destination's.
+        Route::middleware(['feature:inventory.transfers', 'permission:inventory.transfer'])
+            ->group(function () {
+                Route::get('transfers', [StockTransferController::class, 'index'])->name('transfers.index');
+                Route::get('transfers/create', [StockTransferController::class, 'create'])->name('transfers.create');
+                Route::post('transfers', [StockTransferController::class, 'store'])->name('transfers.store');
+                Route::get('transfers/{transfer}', [StockTransferController::class, 'show'])->name('transfers.show');
+                Route::get('transfers/{transfer}/edit', [StockTransferController::class, 'edit'])->name('transfers.edit');
+                Route::put('transfers/{transfer}', [StockTransferController::class, 'update'])->name('transfers.update');
+                Route::post('transfers/{transfer}/send', [StockTransferController::class, 'send'])->name('transfers.send');
+                Route::post('transfers/{transfer}/receive', [StockTransferController::class, 'receive'])->name('transfers.receive');
+                Route::post('transfers/{transfer}/cancel', [StockTransferController::class, 'cancel'])->name('transfers.cancel');
+                Route::delete('transfers/{transfer}', [StockTransferController::class, 'destroy'])->name('transfers.destroy');
+            });
 
         // ---- categories, brands, units (#26) --------------------------------
         Route::middleware('permission:catalog.manage')->group(function () {

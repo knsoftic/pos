@@ -16,7 +16,7 @@
 | **Environment** | Windows 11 + XAMPP (PHP + MySQL/MariaDB) |
 | **Start Date** | 2026-08-25 |
 | **Demo logins** | [LOGIN_CREDENTIALS.md](LOGIN_CREDENTIALS.md) — seeded accounts (dev only, #191) |
-| **Current Status** | 🔄 **Phase 4 chal raha hai (~75%)** — Catalog + **inventory engine** (per-branch stock, append-only ledger, adjustments, opening stock, low-stock, valuation) **mukammal**. Baqi: transfers, batch/expiry, barcode printing, image upload, import/export. Phases 0–3 mukammal. **300 tests / 966 assertions pass** (MySQL `pos_saas_test`). Build + browser verified, console zero errors. ➡️ **Next: Phase 4 Session 3** — stock transfers (draft/sent/received) + expiry/batch. |
+| **Current Status** | 🔄 **Phase 4 ~90%** — Catalog + inventory engine + **stock transfers** mukammal; baqi: batch/expiry, barcode printing, image upload, import/export. Phases 0–3 mukammal. **KN Softic branding** poore system pe live. **322 tests / 1,016 assertions pass**. Build + browser verified. ➡️ **Next:** Phase 4 close, phir Phase 5 (Customers + Suppliers). |
 
 ---
 
@@ -40,7 +40,7 @@
 | **1** | Auth + Super Admin + Tenant Architecture + DB Foundation | ✅ Ho gaya | 100% |
 | **2** | Plans + Subscriptions + Features + Limits + Businesses | ✅ Ho gaya | 100% |
 | **3** | Roles + Permissions + Branches + POS Counters + Employees | ✅ Ho gaya | 100% |
-| **4** | Products + Categories + Brands + Units + Inventory | 🔄 Chal raha hai | ~75% |
+| **4** | Products + Categories + Brands + Units + Inventory | 🔄 Chal raha hai | ~90% |
 | **5** | Customers + Suppliers (+ Ledgers) | ⬜ Baqi | 0% |
 | **6** | Purchases + Supplier Ledger | ⬜ Baqi | 0% |
 | **7** | POS + Sales + Payments + Customer Ledger | ⬜ Baqi | 0% |
@@ -52,13 +52,67 @@
 | **13** | Animations + UI Polish + Performance | ⬜ Baqi | 0% |
 | **14** | Security + Testing | 🔄 Chal raha hai | ~25% |
 | **15** | Deployment Preparation | ⬜ Baqi | 0% |
-| | **TOTAL PROGRESS** | 🟢 | **~37%** |
+| | **TOTAL PROGRESS** | 🟢 | **~39%** |
 
 ---
 
 ## 📝 Session Log (Kaam ki History)
 
 > Naya kaam upar add karo (newest first). Har entry mein: **date**, **kya hua**, **kya next hai**.
+
+### 2026-08-28 — Audit + KN Softic branding + stock transfers 🔄 (Phase 4 ~90%)
+
+Poore project ka audit hua, **KN Softic ki professional branding** lagi, aik purana bug pakra gaya, aur **stock transfers (#32)** mukammal ho gaye.
+
+**🔍 AUDIT (kya mila):**
+- 235 PHP files · 14,282 lines (app/) · 33 migrations · 134 routes · **322 tests pass**
+- Phases 0–3 mukammal, Phase 4 ~75% (ab ~90%)
+- ⚠️ **Bug: tenant dashboard Phase 2 ke baad update hi nahi hua tha** — Products aur Low Stock cards abhi tak `—` placeholder dikha rahe the, jabke 4 products aur 5 stocked shelves live the. Quick actions bhi sab disabled the.
+- ⚠️ Koi branding nahi thi — har jagah `config('app.name')` se "POS SaaS" aa raha tha.
+- ✅ Responsive theek nikla: mobile (375px) pe dashboard/products/inventory/billing — **kisi pe horizontal overflow nahi** (tables apne `overflow-x-auto` container mein scroll karti hain, page nahi).
+
+**🎨 1) KN SOFTIC BRANDING**
+
+- **`config/brand.php`** — company name, product name, tagline, website, support email, version, copyright year: sab aik jagah, env-driven (#190). **Rebrand ab search-and-replace nahi, config change hai.**
+- **`<x-brand.mark>`** — logo SVG **geometry se bana hai, text se nahi**: favicon, email, printed receipt aur us page pe bhi ek jaisa render hona chahiye jahan font CDN load hi na ho. Har instance ko **unique gradient id** milti hai — warna aik hi page pe do marks `<defs>` id share karte aur doosra pehle ki fill le leta (ye asal mein hota hai; test kiya, 3 marks aik page pe, teeno unique).
+- `<x-brand.logo>` (mark + wordmark), `<x-brand.footer>` (copyright range **khud barhta hai**: "© 2026" → "© 2026–2031"), `<x-brand.powered-by>`, aur `public/favicon.svg`.
+- **⚠️ Sab se ahem faisla — kis ka naam kahan:**
+  - `/login`, `/admin`, emails → **KN SOFTIC**. Ye product ki apni surfaces hain.
+  - `/app` (tenant ka workspace) → **BUSINESS ka naam**. Dukaandar ka staff apni dukaan mein kaam karta hai, apne supplier ke product mein nahi. KN Softic wahan sirf footer ki aik halki si "Powered by" line hai.
+  - Ye ulta karna classic white-label ghalti hai — har customer ko lagta hai wo kisi aur ke product ke andar baitha hai.
+- Applied: guest layout (login/forgot/reset — logo + tagline + footer), admin sidebar + topbar badge + footer, tenant sidebar + footer, `APP_NAME`, favicon, aur `.env` + `.env.example` mein poora `BRAND_*` block.
+
+**🐞 2) DASHBOARD BUG FIX (asli pending functionality)**
+- Products aur Low Stock cards ab **asli figures** dikhate hain, aur apne module ke **link** hain (number tabhi kaam ka hai jab us pe action ho sake).
+- Dono **permission-gated**: `null` ka matlab "aapke role ko nahi dikhana" hai aur wo dash render hota hai — **gumraah karne wala zero nahi**.
+- Quick actions ab tabhi live hain jab module **aur** us user ki permission dono mojood hon; warna disabled + wajah hover pe. Jo button live lagta ho aur phir refuse kar de, wo us se bura hai jo kabhi live laga hi nahi.
+- Banner ka purana text ("POS, products aur reports agle phases mein…") update hua.
+
+**📦 3) STOCK TRANSFERS — #32 mukammal**
+
+- **2 tables:** `stock_transfers` (reference, from/to branch, status, aur **teen alag timestamps + teen alag log**: drafted / sent / received) + `stock_transfer_items` (**do quantities**: `quantity_sent` aur `quantity_received`).
+- **`TransferStatus` enum:** Draft → Sent (in transit) → Received, ya Cancelled.
+- **⚠️ Ye teen steps kyun, aik "move" button kyun nahi:** transfer aik **safar** hai. Maal aik shelf se nikal jata hai us se pehle ke doosri pe pohanche, aur us dauran wo **kisi shelf pe nahi hota**. Aik hi movement post karne se van invisible ho jati, aur jab **11 nikle aur 10 pohanche**, to gyarhwan record karne ki koi jagah hi na hoti.
+- **Shortfall reconcile NAHI hota.** Ledger seedha dikhata hai: maal nikla aur kabhi pohancha nahi. Transfer apne chehre pe farq likhe rakhta hai (loud rose banner). Jo system numbers ko chup-chaap barabar kar deta hai wo wahi ek signal chhupa raha hota hai jo batata hai ke raste mein kuch ghalat hua.
+- **Cost maal ke saath safar karti hai** — receiving branch ko wahi cost milti hai jo asal mein lagi thi (browser test: 55 pe khareeda, catalogue 40, destination pe average = 55).
+- **Cancel:** draft cancel karna muft hai; **sent** cancel karne pe maal **wapas source shelf pe** post hota hai (movement ke zariye, taake round trip ledger mein nazar aaye, mit na jaye). Aur **sirf sending branch** hi transit wala transfer cancel kar sakti hai — kyunke maal wahin wapas jana hai.
+- **Branch rules (#48):** bhejna source branch ka kaam, receive karna destination ka. List **dono taraf** se dikhti hai (`scopeVisibleTo`) — manager ko apni branch pe **aane wala** maal bhi dikhna chahiye, sirf bheja hua nahi.
+- UI: index (status filter + "in transit" count), draft form (Alpine rows), aur show page — send / receive-with-count / cancel sab wahin se.
+
+**⚠️ Tests — 22 naye, sab PASS**
+- `Inventory/StockTransferTest` (22): draft kuch move nahi karta · send source se nikalta hai aur **kahin nahi rakhta** · receive destination pe rakhta hai · **cost safar karti hai** · shortfall record hota hai · 0 arrive pe koi movement nahi · stock se zyada nahi bhej sakte (poora rollback) · aik hi product do baar nahi · service transfer nahi ho sakti · sent edit nahi hota · received cancel nahi hota · feature off · draft/sent cancel ka farq · teen branch-access rules · poora HTTP flow · permission · cross-tenant.
+- **Result: `php artisan test` → 322 tests / 1,016 assertions PASS**
+
+**✅ Browser verification (asli flow, end-to-end)**
+- Login page pe KN Softic logo + tagline + footer; admin console pe branded sidebar; tenant sidebar pe business ka naam + "Powered by KN Softic".
+- Transfer: draft (TRF-000001, 11 units) → **send** → *"is on its way"*, Main Branch 30 → 19 → **receive 10 of 11** → *"Received with a shortfall of 1 — the difference left the source and never arrived."*
+- Ledger confirm: `transfer_out | Main Branch | −11 | bal=19` aur `transfer_in | Depot | +10 | bal=10`. **Gum shuda 1 kisi shelf pe nahi — yehi sach hai.**
+- 🐞 Verification ke dauran khud ko logout kar liya: `querySelector('form')` ne page ka **pehla** form uthaya (topbar ka logout form), transfer form nahi. Sabaq: form hamesha `action` se target karo.
+
+**⬜ Phase 4 mein ab sirf ye baqi:** batch + expiry tracking (#34) · barcode label printing (#27) · product image upload (#149) · CSV import/export (#150/#151).
+
+➡️ **Next:** Phase 4 close (expiry + barcode + import/export), phir **Phase 5** — Customers + Suppliers + ledgers.
+
 
 ### 2026-08-28 — Phase 4 (Session 2): Inventory engine 🔄 (~75% — stock, ledger, adjustments, low stock)
 
@@ -577,7 +631,7 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 - [x] Automatic stock movement (purchase↑ sale↓ returns/adjust) — #29 *(engine tayyar: `StockMovementType` sign khud decide karta hai. Purchase/sale **callers** apne modules ke saath aayenge — Phase 6/7)*
 - [x] Inventory ledger (full history) — #30 *(append-only, koi `updated_at` nahi; running balance har line pe stamped; screen pe newest-first + kis ne kiya)*
 - [x] Stock adjustment (add/remove + reason) — #31 *(reason **required**; audit log; stock take alag se **farq** post karta hai, total nahi)*
-- [ ] Stock transfer (Branch A→B, draft/sent/received) — #32
+- [x] Stock transfer (Branch A→B, draft/sent/received) — #32 *(teen steps kyunke safar ke teen lamhe hain; in-transit stock kisi shelf pe nahi hota; **shortfall reconcile nahi hota**; cost maal ke saath jati hai; sent cancel karne pe stock wapas source pe post hota hai)*
 - [x] Low stock alerts — #33 *(threshold: variant → product → config, SQL mein resolve; inventory screen pe count + filter. Email/push notifications notification system ke saath aayenge)*
 - [ ] Expiry management (batch + expiry, reports) — #34
 - [x] Multi-branch inventory (per-branch stock) — #136 *(aik row per (branch, product, variant); branch scope se cashier ko sirf apni branch ka stock)*
@@ -780,7 +834,7 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 - [x] Feature tests: Subscription Expiry — #116 *(`Subscription/SubscriptionExpiryTest` 26 + `Subscription/SubscriptionGateTest` 22 — trial/grace/expiry, lock vs read-only vs pos-off, stale status column dono taraf se)*
 - [x] ⚠️ Tenant leak test (Business A → Business B URL = 403/404) — #117 *(cross-tenant PK `find()` → null; dashboard HTTP test dono tenants pe; request input se tenant switch block)*
 
-> **Ab tak ka test status:** `php artisan test` → **300 tests / 966 assertions PASS** (MySQL `pos_saas_test`) — Auth 22 · PasswordReset 11 · TenantIsolation 20 · PlanLimit 29 · PlanFeature 21 · SubscriptionExpiry 26 · SubscriptionGate 22 · RolePermission 31 · BranchAccess 19 · Employee 20 · Catalog 23 · Product 24 · Inventory 31 · Unit 1. Har naye phase ke saath yahan tests barhte rahenge.
+> **Ab tak ka test status:** `php artisan test` → **322 tests / 1,016 assertions PASS** (MySQL `pos_saas_test`) — Auth 22 · PasswordReset 11 · TenantIsolation 20 · PlanLimit 29 · PlanFeature 21 · SubscriptionExpiry 26 · SubscriptionGate 22 · RolePermission 31 · BranchAccess 19 · Employee 20 · Catalog 23 · Product 24 · Inventory 31 · StockTransfer 22 · Unit 1. Har naye phase ke saath yahan tests barhte rahenge.
 
 ---
 
