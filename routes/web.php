@@ -14,6 +14,7 @@ use App\Http\Controllers\App\BrandController;
 use App\Http\Controllers\App\CategoryController;
 use App\Http\Controllers\App\DashboardController as AppDashboardController;
 use App\Http\Controllers\App\EmployeeController;
+use App\Http\Controllers\App\InventoryController;
 use App\Http\Controllers\App\PosCounterController;
 use App\Http\Controllers\App\ProductController;
 use App\Http\Controllers\App\RoleController;
@@ -153,6 +154,17 @@ Route::middleware('tenant.app')
 
         Route::delete('products/{product}', [ProductController::class, 'destroy'])
             ->middleware('permission:products.delete')->name('products.destroy');
+
+        // ---- inventory (#28, #30, #31, #136) --------------------------------
+        // Reading stock and changing it are separate authorities: a shop floor
+        // role usually needs the first and must not have the second.
+        Route::middleware('permission:inventory.view')->group(function () {
+            Route::get('inventory', [InventoryController::class, 'index'])->name('inventory.index');
+            Route::get('inventory/{product}/ledger', [InventoryController::class, 'ledger'])->name('inventory.ledger');
+        });
+
+        Route::post('inventory/adjust', [InventoryController::class, 'adjust'])
+            ->middleware('permission:inventory.adjust')->name('inventory.adjust');
 
         // ---- categories, brands, units (#26) --------------------------------
         Route::middleware('permission:catalog.manage')->group(function () {

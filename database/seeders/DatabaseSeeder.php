@@ -6,10 +6,12 @@ use App\Enums\BillingCycle;
 use App\Models\Admin;
 use App\Models\Business;
 use App\Models\Plan;
+use App\Models\Product;
 use App\Models\Role;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\CatalogService;
+use App\Services\InventoryService;
 use App\Services\OrganizationProvisioner;
 use App\Services\ProductService;
 use App\Services\SubscriptionService;
@@ -176,7 +178,41 @@ class DatabaseSeeder extends Seeder
                 'type' => 'service',
                 'selling_price' => 250,
             ]);
+
+            $this->seedOpeningStock();
         });
+    }
+
+    /**
+     * Opening stock for the demo catalogue (#152), through the real service so
+     * every figure has a ledger line behind it — exactly as it would if the
+     * shop had typed it in on their first day.
+     *
+     * Services are skipped automatically: they carry no stock.
+     */
+    protected function seedOpeningStock(): void
+    {
+        $inventory = app(InventoryService::class);
+
+        if (! $inventory->isTrackingEnabled()) {
+            return;
+        }
+
+        foreach (Product::query()->with('variants')->get() as $product) {
+            if (! $product->tracksStock()) {
+                continue;
+            }
+
+            if ($product->hasVariants()) {
+                foreach ($product->variants as $variant) {
+                    $inventory->recordOpeningStock($product, random_int(3, 20), (float) $variant->cost_price, $variant->id);
+                }
+
+                continue;
+            }
+
+            $inventory->recordOpeningStock($product, random_int(10, 60), (float) $product->cost_price);
+        }
     }
 
     /**

@@ -16,7 +16,7 @@
 | **Environment** | Windows 11 + XAMPP (PHP + MySQL/MariaDB) |
 | **Start Date** | 2026-08-25 |
 | **Demo logins** | [LOGIN_CREDENTIALS.md](LOGIN_CREDENTIALS.md) — seeded accounts (dev only, #191) |
-| **Current Status** | 🔄 **Phase 4 chal raha hai (~40%)** — Catalog (products, categories, subcategories, brands, units, variants, auto-barcode) **mukammal**; **inventory abhi baqi hai** (stock, movements, adjustments, transfers). Phases 0–3 mukammal. **269 tests / 886 assertions pass** (MySQL `pos_saas_test`). Build + browser verified, console/network zero errors. ➡️ **Next: Phase 4 Session 2** — `InventoryService` + per-branch stock + movement ledger. |
+| **Current Status** | 🔄 **Phase 4 chal raha hai (~75%)** — Catalog + **inventory engine** (per-branch stock, append-only ledger, adjustments, opening stock, low-stock, valuation) **mukammal**. Baqi: transfers, batch/expiry, barcode printing, image upload, import/export. Phases 0–3 mukammal. **300 tests / 966 assertions pass** (MySQL `pos_saas_test`). Build + browser verified, console zero errors. ➡️ **Next: Phase 4 Session 3** — stock transfers (draft/sent/received) + expiry/batch. |
 
 ---
 
@@ -40,7 +40,7 @@
 | **1** | Auth + Super Admin + Tenant Architecture + DB Foundation | ✅ Ho gaya | 100% |
 | **2** | Plans + Subscriptions + Features + Limits + Businesses | ✅ Ho gaya | 100% |
 | **3** | Roles + Permissions + Branches + POS Counters + Employees | ✅ Ho gaya | 100% |
-| **4** | Products + Categories + Brands + Units + Inventory | 🔄 Chal raha hai | ~40% |
+| **4** | Products + Categories + Brands + Units + Inventory | 🔄 Chal raha hai | ~75% |
 | **5** | Customers + Suppliers (+ Ledgers) | ⬜ Baqi | 0% |
 | **6** | Purchases + Supplier Ledger | ⬜ Baqi | 0% |
 | **7** | POS + Sales + Payments + Customer Ledger | ⬜ Baqi | 0% |
@@ -52,13 +52,61 @@
 | **13** | Animations + UI Polish + Performance | ⬜ Baqi | 0% |
 | **14** | Security + Testing | 🔄 Chal raha hai | ~25% |
 | **15** | Deployment Preparation | ⬜ Baqi | 0% |
-| | **TOTAL PROGRESS** | 🟢 | **~34%** |
+| | **TOTAL PROGRESS** | 🟢 | **~37%** |
 
 ---
 
 ## 📝 Session Log (Kaam ki History)
 
 > Naya kaam upar add karo (newest first). Har entry mein: **date**, **kya hua**, **kya next hai**.
+
+### 2026-08-28 — Phase 4 (Session 2): Inventory engine 🔄 (~75% — stock, ledger, adjustments, low stock)
+
+Ab stock ka **asli engine** ban gaya. Baqi Phase 4 mein sirf transfers, batch/expiry, barcode printing, image upload aur import/export reh gaye hain.
+
+**✅ JO HO GAYA:**
+
+**1) Do nayi tables — aur inka rishta sab se ahem hai**
+- **`stock_movements` = SACH** (#30). Append-only ledger, har tabdeeli ki aik line. **`updated_at` hai hi nahi** — movement kabhi edit nahi hoti; ghalti ka ilaj ulti movement post karna hai, bilkul waise jaise financial record void hota hai delete nahi (#133, #198). Isi liye ye "evidence" hai, "andaza" nahi.
+- **`stocks` = CACHE**, sach nahi. Ye running balance hai jo **usi transaction** mein update hota hai jis mein movement likhi jati hai — taake POS ka sawal ("ye bech sakta hoon?") aik indexed lookup ho, poori history ka SUM nahi. `recalculate()` isay ledger se dobara bana deta hai: ye repair tool bhi hai aur **saboot bhi** ke dono kabhi ghalat taur pe alag nahi ho sakte.
+- `quantity` **signed** hai (+ andar, − bahar), to running balance sirf aik SUM hai aur kisi reader ko yaad nahi rakhna parta ke purchase return kis taraf jata hai.
+- **`variant_key` generated column** (`COALESCE(product_variant_id, 0)`): SQL ke unique index NULL ko constrain nahi karte — do rows jinka variant NULL ho MySQL ke nazdeek "alag" hain, yani simple product ke **do stock rows** ban sakte the. Generated column NULL ko 0 bana deta hai, ab index asal mein kaam karta hai.
+
+**2) `InventoryService` — stock badalne ka WAAHID raasta (#185)**
+- Har module (purchase, POS, returns, transfer, stock take) `createMovement()` se guzarta hai. Ye sirf convention nahi: `stocks.quantity` fillable hi nahi, to doosra raasta hai hi nahi. **Poora ledger** hi stock figure ko andaze se alag karta hai.
+- Aik movement **atomically** ye karti hai: shelf row pe **`lockForUpdate`** (do till aik hi aakhri unit na bech dein) → type se sign → **negative stock check (#142)** → incoming pe **weighted average cost** dobara nikalna → ledger line + cached balance, dono aik hi transaction mein.
+- API: `getAvailableStock()`, `hasEnough()`, `createMovement()`, `adjust()`, `recordOpeningStock()`, `setStockTo()`, `ledger()`, `lowStock()`, `valuation()`, `recalculate()`, `stockByBranch()`, `isTrackingEnabled()`.
+- **Jaan boojh kar ye service authorization NAHI karti** — permissions/features route aur calling service dekhte hain. Warna pehli dafa jab background job ko correction post karni hoti, isay khud ko bypass karne ko kaha jata.
+
+**3) Faisle jo code mein likhe hain**
+- **Negative stock default NO (#142)** — `config/inventory.php` se, env-driven. Jo POS stock ko minus mein jane deta hai wo dukaan ko chup-chaap keh raha hota hai ke uske stock figures fiction hain. Magar kuch businesses ko zaroorat hoti hai (bakery jo oven mein para maal bech rahi ho), is liye ye **setting** hai, rule nahi. Phase 11 ise per-business settings mein le jayega.
+- **Costing = weighted average**, FIFO nahi: average stock take, negative balance aur correction — teeno ko bina "layers" unwind kiye survive karta hai. Outgoing movement average ko haath nahi lagati (sale pehle se books pe mojood cost pe value consume karti hai).
+- **Cost 0 kabhi accidentally nahi:** unit cost na di jaye to shelf ka average, warna catalogue ki cost price. Warna stock chup-chaap zero pe value ho jata.
+- **Stock take total nahi, FARQ post karta hai** — ledger mein "kya badla" likha jata hai, to count khud auditable rehta hai, silent overwrite nahi.
+- **Low stock threshold** (#33): variant → product → config fallback, aur **SQL mein resolve** hota hai taake sweep aik query rahe. Jis product ne threshold set hi nahi kiya us pe **khamoshi sahi jawab hai** — poore catalogue pe blanket threshold sirf shor paida karta hai jo koi nahi parhta.
+- **Valuation mein negative shelves shamil hain** — oversold shelf asli masla hai; usay total se chhupana matlab number ko dukaan ki umeed ke mutabiq banana, record ke mutabiq nahi.
+
+**4) UI — 2 naye screens**
+- **Inventory**: 4 stat cards (shelves / units on hand / low / out of stock), search + branch + status filters (low, out, oversold), stock value (sirf jise cost dekhne ki ijazat ho #52), aur per-shelf table with status badges (#28).
+- **Ledger** (#30): product ka per-branch stock, poori movement history (newest first, running balance, kis ne kiya), aur **adjust stock form** (#31) — reason **required**, kyunke bina wajah badla hua stock figure hi wo jagah hai jahan shrinkage chhupti hai.
+
+**5) Opening stock (#152)** — `recordOpeningStock()`, aur ye bhi movement ki tarah post hoti hai, to **din aik** usi history ka hissa hai jis ka din hazaar. Aik shelf pe sirf aik dafa; doosri entry correction hai, aur correction adjustment hai.
+
+**6) ⚠️ Tests — 31 naye, sab PASS**
+- `Inventory/InventoryTest` (31): sign rules, negative-stock dono taraf, weighted average, cost fallback, adjustments + audit, stock take ka farq, opening stock idempotent, variants per-variant stock, ledger running balance, **recalculate drift detect karta hai**, low-stock teeno levels, valuation, per-branch stock, cashier ko doosri branch ka stock nahi dikhta, unreachable branch mein movement refuse, feature off pe refuse, aur HTTP pe permission split.
+- **Result: `php artisan test` → 300 tests / 966 assertions PASS**.
+
+**7) Seeder + build + browser verification**
+- Seeder ab demo catalogue ko **opening stock** bhi deta hai (asli service se) — 5 shelves, 87 units, valuation 19,631.
+- ✅ Browser verified: Inventory screen (cards + table + value), ledger page, aur **asli adjustment browser se ki**: −2 "Two bottles broke in the crate" → flash *"Stock adjusted by −2 — now 30."*, ledger mein nayi line (balance 30, Store Owner ke naam ke saath), opening stock line (+32, System) neeche. Zero console errors.
+
+**⬜ BAQI (Phase 4 close karne ke liye):**
+- ⬜ **Stock transfer Branch A→B (draft/sent/received)** — #32
+- ⬜ **Batch + expiry tracking aur uski reports** — #34
+- ⬜ **Barcode label printing** — #27 · **Product image upload** — #149 · **CSV import/export** — #150/#151
+
+➡️ **Next: Phase 4 Session 3** — transfers + expiry, phir barcode printing aur import/export; us ke baad Phase 4 close.
+
 
 ### 2026-08-28 — Phase 4 (Session 1): Catalog mukammal 🔄 (~40% — Products + Categories + Brands + Units)
 
@@ -525,19 +573,19 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 - [ ] Barcode label printing (custom size, name+price) — #27
 
 ### Inventory (`InventoryService` — #185)
-- [ ] Inventory listing (stock, value, status badges) — #28
-- [ ] Automatic stock movement (purchase↑ sale↓ returns/adjust) — #29
-- [ ] Inventory ledger (full history) — #30
-- [ ] Stock adjustment (add/remove + reason) — #31
+- [x] Inventory listing (stock, value, status badges) — #28 *(per-shelf table + 4 summary cards; stock value sirf `products.view_cost` walon ko #52)*
+- [x] Automatic stock movement (purchase↑ sale↓ returns/adjust) — #29 *(engine tayyar: `StockMovementType` sign khud decide karta hai. Purchase/sale **callers** apne modules ke saath aayenge — Phase 6/7)*
+- [x] Inventory ledger (full history) — #30 *(append-only, koi `updated_at` nahi; running balance har line pe stamped; screen pe newest-first + kis ne kiya)*
+- [x] Stock adjustment (add/remove + reason) — #31 *(reason **required**; audit log; stock take alag se **farq** post karta hai, total nahi)*
 - [ ] Stock transfer (Branch A→B, draft/sent/received) — #32
-- [ ] Low stock alerts — #33
+- [x] Low stock alerts — #33 *(threshold: variant → product → config, SQL mein resolve; inventory screen pe count + filter. Email/push notifications notification system ke saath aayenge)*
 - [ ] Expiry management (batch + expiry, reports) — #34
-- [ ] Multi-branch inventory (per-branch stock) — #136
-- [ ] Negative stock setting (default No) — #142
-- [ ] `getAvailableStock() / createMovement()` centralized — #185
+- [x] Multi-branch inventory (per-branch stock) — #136 *(aik row per (branch, product, variant); branch scope se cashier ko sirf apni branch ka stock)*
+- [x] Negative stock setting (default No) — #142 *(`config/inventory.php`, env-driven; refuse hone pe `InsufficientStockException` asli numbers batati hai. Phase 11 ise per-business setting bana dega)*
+- [x] `getAvailableStock() / createMovement()` centralized — #185 *(`InventoryService` — stock badalne ka waahid raasta; `stocks.quantity` fillable hi nahi. `recalculate()` ledger se rebuild karta hai)*
 
 ### Data Migration Helpers
-- [ ] Opening stock support — #152
+- [x] Opening stock support — #152 *(`recordOpeningStock()` — movement ki tarah post hoti hai, per shelf sirf aik dafa; seeder bhi isi se demo stock deta hai)*
 - [ ] Bulk import (CSV/Excel, plan feature) — #150
 - [ ] Bulk export (Excel/CSV) — #151
 - [x] Unit conversion future-ready structure — #158 *(base unit + `conversion_factor`; stock hamesha base unit mein, `toBase()`/`fromBase()` tested. Multi-unit **selling** POS ke saath)*
@@ -726,13 +774,13 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 - [x] Feature tests: Tenant Isolation — #116, #117 *(`TenantIsolationTest` — 16 tests: scoped reads/aggregates, cross-tenant `find()` → null, creating-hook force, mass-assignment, escape hatches, HTTP isolation)*
 - [x] Feature tests: Login + Permissions *(`Auth/AuthenticationTest` 22 + `Auth/PasswordResetTest` 11 + `Organization/RolePermissionTest` 31 — dono guards, cross-guard denial, throttle, enumeration safety, aur poora 3-layer permission check)* — #116
 - [x] Feature tests: Plan Limits, Plan Features — #116 *(`Subscription/PlanLimitTest` 29 + `Subscription/PlanFeatureTest` 21 — resolution order, unlimited, enforcement, cache invalidation, `CheckFeature` middleware)*
-- [ ] Feature tests: POS Sale, Stock Update — #116
+- [ ] Feature tests: POS Sale — #116 · [x] **Stock Update** *(`Inventory/InventoryTest` 31 — ledger vs cache, negative stock, costing, per-branch isolation)*
 - [ ] Feature tests: Purchase, Returns — #116
 - [ ] Feature tests: Customer/Supplier Balance — #116
 - [x] Feature tests: Subscription Expiry — #116 *(`Subscription/SubscriptionExpiryTest` 26 + `Subscription/SubscriptionGateTest` 22 — trial/grace/expiry, lock vs read-only vs pos-off, stale status column dono taraf se)*
 - [x] ⚠️ Tenant leak test (Business A → Business B URL = 403/404) — #117 *(cross-tenant PK `find()` → null; dashboard HTTP test dono tenants pe; request input se tenant switch block)*
 
-> **Ab tak ka test status:** `php artisan test` → **269 tests / 886 assertions PASS** (MySQL `pos_saas_test`) — Auth 22 · PasswordReset 11 · TenantIsolation 20 · PlanLimit 29 · PlanFeature 21 · SubscriptionExpiry 26 · SubscriptionGate 22 · RolePermission 31 · BranchAccess 19 · Employee 20 · Catalog 23 · Product 24 · Unit 1. Har naye phase ke saath yahan tests barhte rahenge.
+> **Ab tak ka test status:** `php artisan test` → **300 tests / 966 assertions PASS** (MySQL `pos_saas_test`) — Auth 22 · PasswordReset 11 · TenantIsolation 20 · PlanLimit 29 · PlanFeature 21 · SubscriptionExpiry 26 · SubscriptionGate 22 · RolePermission 31 · BranchAccess 19 · Employee 20 · Catalog 23 · Product 24 · Inventory 31 · Unit 1. Har naye phase ke saath yahan tests barhte rahenge.
 
 ---
 
