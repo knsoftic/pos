@@ -2,6 +2,7 @@
 
 @php
     use App\Support\FeatureRegistry;
+    use App\Support\PermissionRegistry;
 
     $user = auth('web')->user();
     // `currentBusiness` is shared by the SetBusinessTenant middleware.
@@ -26,34 +27,45 @@
     $impersonation = session(\App\Http\Controllers\Admin\ImpersonationController::SESSION_KEY);
 
     /*
-     | Navigation is filtered by entitlement, not just greyed out (#13, #125): a
-     | tenant on a plan without multi-branch never sees a Branches link at all.
-     | `feature => null` means the item is always shown — Dashboard and Billing
-     | must stay reachable, Billing especially, since it is where an expired
-     | tenant goes to fix the problem.
+     | Navigation is filtered by BOTH gates, not just greyed out (#13, #125, #188):
+     |
+     |   feature    → is it in the plan? A tenant without multi-branch never sees
+     |                a Branches link at all.
+     |   permission → may THIS person use it? A cashier does not see Employees,
+     |                even though the plan includes it.
+     |
+     | `null` on either means "not gated by that". Dashboard and Billing are
+     | ungated on purpose — Billing especially, since it is where an expired
+     | tenant goes to fix the problem, whoever they are.
+     |
+     | This is presentation only. Every one of these routes carries its own
+     | `permission:` middleware; hiding a link is a courtesy, not a guard.
      */
     $nav = [
-        ['label' => 'Dashboard',    'icon' => 'dashboard',   'route' => 'app.dashboard',     'feature' => null],
-        ['label' => 'POS',          'icon' => 'pos',         'route' => null, 'feature' => FeatureRegistry::POS_TERMINAL],
-        ['label' => 'Sales',        'icon' => 'sales',       'route' => null, 'feature' => FeatureRegistry::SALES_INVOICING],
-        ['label' => 'Purchases',    'icon' => 'purchases',   'route' => null, 'feature' => FeatureRegistry::PURCHASES_ORDERS],
-        ['label' => 'Products',     'icon' => 'products',    'route' => null, 'feature' => null],
-        ['label' => 'Inventory',    'icon' => 'inventory',   'route' => null, 'feature' => FeatureRegistry::INVENTORY_STOCK_TRACKING],
-        ['label' => 'Customers',    'icon' => 'customers',   'route' => null, 'feature' => FeatureRegistry::CUSTOMERS_MANAGEMENT],
-        ['label' => 'Suppliers',    'icon' => 'suppliers',   'route' => null, 'feature' => FeatureRegistry::PURCHASES_SUPPLIER_LEDGER],
-        ['label' => 'Expenses',     'icon' => 'expenses',    'route' => null, 'feature' => FeatureRegistry::ACCOUNTING_EXPENSES],
-        ['label' => 'Reports',      'icon' => 'reports',     'route' => null, 'feature' => FeatureRegistry::REPORTS_BASIC],
-        ['label' => 'Employees',    'icon' => 'employees',   'route' => null, 'feature' => FeatureRegistry::TEAM_MULTI_USER],
-        ['label' => 'Branches',     'icon' => 'branches',    'route' => null, 'feature' => FeatureRegistry::BRANCHES_MULTI_BRANCH],
-        ['label' => 'POS Counters', 'icon' => 'counter',     'route' => null, 'feature' => FeatureRegistry::POS_MULTI_COUNTER],
-        ['label' => 'Billing',      'icon' => 'credit-card', 'route' => 'app.billing.index', 'feature' => null],
-        ['label' => 'Settings',     'icon' => 'settings',    'route' => null, 'feature' => null],
+        ['label' => 'Dashboard',    'icon' => 'dashboard',   'route' => 'app.dashboard',       'feature' => null, 'permission' => null],
+        ['label' => 'POS',          'icon' => 'pos',         'route' => null, 'feature' => FeatureRegistry::POS_TERMINAL, 'permission' => PermissionRegistry::POS_OPERATE],
+        ['label' => 'Sales',        'icon' => 'sales',       'route' => null, 'feature' => FeatureRegistry::SALES_INVOICING, 'permission' => PermissionRegistry::SALES_VIEW],
+        ['label' => 'Purchases',    'icon' => 'purchases',   'route' => null, 'feature' => FeatureRegistry::PURCHASES_ORDERS, 'permission' => PermissionRegistry::PURCHASES_VIEW],
+        ['label' => 'Products',     'icon' => 'products',    'route' => null, 'feature' => null, 'permission' => PermissionRegistry::PRODUCTS_VIEW],
+        ['label' => 'Inventory',    'icon' => 'inventory',   'route' => null, 'feature' => FeatureRegistry::INVENTORY_STOCK_TRACKING, 'permission' => PermissionRegistry::INVENTORY_VIEW],
+        ['label' => 'Customers',    'icon' => 'customers',   'route' => null, 'feature' => FeatureRegistry::CUSTOMERS_MANAGEMENT, 'permission' => PermissionRegistry::CUSTOMERS_VIEW],
+        ['label' => 'Suppliers',    'icon' => 'suppliers',   'route' => null, 'feature' => FeatureRegistry::PURCHASES_SUPPLIER_LEDGER, 'permission' => PermissionRegistry::SUPPLIERS_VIEW],
+        ['label' => 'Expenses',     'icon' => 'expenses',    'route' => null, 'feature' => FeatureRegistry::ACCOUNTING_EXPENSES, 'permission' => PermissionRegistry::EXPENSES_VIEW],
+        ['label' => 'Reports',      'icon' => 'reports',     'route' => null, 'feature' => FeatureRegistry::REPORTS_BASIC, 'permission' => PermissionRegistry::REPORTS_VIEW],
+        ['label' => 'Employees',    'icon' => 'employees',   'route' => 'app.employees.index', 'feature' => FeatureRegistry::TEAM_MULTI_USER, 'permission' => PermissionRegistry::EMPLOYEES_VIEW],
+        ['label' => 'Roles',        'icon' => 'shield',      'route' => 'app.roles.index',     'feature' => FeatureRegistry::TEAM_ROLES, 'permission' => PermissionRegistry::ROLES_MANAGE],
+        ['label' => 'Branches',     'icon' => 'branches',    'route' => 'app.branches.index',  'feature' => null, 'permission' => PermissionRegistry::BRANCHES_VIEW],
+        ['label' => 'POS Counters', 'icon' => 'counter',     'route' => 'app.counters.index',  'feature' => FeatureRegistry::POS_TERMINAL, 'permission' => PermissionRegistry::POS_COUNTERS_MANAGE],
+        ['label' => 'Billing',      'icon' => 'credit-card', 'route' => 'app.billing.index',   'feature' => null, 'permission' => null],
+        ['label' => 'Settings',     'icon' => 'settings',    'route' => null, 'feature' => null, 'permission' => PermissionRegistry::SETTINGS_MANAGE],
     ];
 
-    $nav = array_values(array_filter(
-        $nav,
-        fn ($item) => $item['feature'] === null || ($layoutFeatures[$item['feature']] ?? false),
-    ));
+    $nav = array_values(array_filter($nav, function ($item) use ($layoutFeatures, $user) {
+        $featureOk = $item['feature'] === null || ($layoutFeatures[$item['feature']] ?? false);
+        $permissionOk = $item['permission'] === null || (bool) $user?->can($item['permission']);
+
+        return $featureOk && $permissionOk;
+    }));
 
     // Only the two or three tightest quotas belong in the sidebar; the billing
     // page shows every one of them.
@@ -144,7 +156,10 @@
             @foreach ($nav as $item)
                 @php
                     $isLive = $item['route'] !== null;
-                    $active = $isLive && request()->routeIs($item['route']);
+                    // Highlight the whole section, not just its index: editing a
+                    // branch should still show Branches as the active item.
+                    $family = $isLive ? str_replace('.index', '.*', $item['route']) : null;
+                    $active = $isLive && request()->routeIs($family);
                 @endphp
                 <a href="{{ $isLive ? route($item['route']) : '#' }}"
                    @class([

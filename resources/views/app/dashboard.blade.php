@@ -1,5 +1,9 @@
 <x-layouts.app title="Dashboard">
 
+    {{-- The dashboard is where a refused action lands (PermissionDeniedException
+         redirects back, and back is usually here), so it must be able to say why. --}}
+    <x-flash />
+
     {{-- Welcome banner --}}
     <div class="mb-6 overflow-hidden rounded-2xl bg-gradient-to-r from-brand-600 to-brand-500 p-6 text-white shadow-sm sm:p-8">
         <div class="flex flex-wrap items-center justify-between gap-4">
@@ -19,7 +23,7 @@
                 <span class="badge bg-white/15 text-white ring-1 ring-white/25">
                     {{ ucfirst($business->status) }} · {{ $business->timezone }}
                 </span>
-                <span class="text-xs text-brand-100/80">Phase 2 · Plan &amp; subscription live</span>
+                <span class="text-xs text-brand-100/80">Phase 3 · Roles, branches &amp; team live</span>
             </div>
         </div>
     </div>
@@ -105,11 +109,14 @@
                                 </td>
                                 <td class="px-5 py-3 text-slate-600 dark:text-slate-300">{{ $member->email }}</td>
                                 <td class="px-5 py-3">
-                                    @if ($member->is_business_owner)
-                                        <span class="badge-green">Owner</span>
-                                    @else
-                                        <span class="badge-slate">Staff</span>
-                                    @endif
+                                    {{-- Real role names now that roles exist (#51);
+                                         someone with no role is worth flagging, since
+                                         they cannot do anything until they get one. --}}
+                                    <span @class([
+                                        'badge-green' => $member->isOwner(),
+                                        'badge-slate' => ! $member->isOwner() && $member->role_id !== null,
+                                        'badge-amber' => ! $member->isOwner() && $member->role_id === null,
+                                    ])>{{ $member->roleName() }}</span>
                                 </td>
                                 <td class="px-5 py-3 text-slate-500">
                                     {{ $member->last_login_at?->diffForHumans() ?? 'Never' }}
@@ -119,8 +126,14 @@
                     </tbody>
                 </table>
             </div>
-            <div class="border-t border-slate-100 px-5 py-3 text-xs text-slate-400 dark:border-slate-800">
-                Employee management + roles &amp; permissions — Phase 3
+            <div class="border-t border-slate-100 px-5 py-3 text-xs dark:border-slate-800">
+                @can(\App\Support\PermissionRegistry::EMPLOYEES_VIEW)
+                    <a href="{{ route('app.employees.index') }}" class="font-medium text-brand-600 hover:underline dark:text-brand-400">
+                        Manage employees &rarr;
+                    </a>
+                @else
+                    <span class="text-slate-400">Ask the business owner if you need to manage the team.</span>
+                @endcan
             </div>
         </div>
 

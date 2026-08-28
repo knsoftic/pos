@@ -1,12 +1,14 @@
 <?php
 
 use App\Http\Middleware\CheckFeature;
+use App\Http\Middleware\CheckPermission;
 use App\Http\Middleware\CheckSubscription;
 use App\Http\Middleware\SetBusinessTenant;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Middleware\SubstituteBindings;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -19,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'tenant' => SetBusinessTenant::class,
             'subscription' => CheckSubscription::class,
             'feature' => CheckFeature::class,
+            'permission' => CheckPermission::class,
         ]);
 
         // The standard stack for every business-facing route. Bundled as a group
@@ -30,6 +33,21 @@ return Application::configure(basePath: dirname(__DIR__))
             'tenant',
             'subscription',
         ]);
+
+        /*
+         | ⚠️ THE TENANT MUST BE RESOLVED BEFORE ROUTE MODEL BINDING.
+         |
+         | SubstituteBindings lives in the `web` group, which runs BEFORE a
+         | route's own middleware. Without this, `/app/roles/{role}` would look
+         | the row up with no tenant context — i.e. unscoped — and happily hand
+         | one business another business's record before SetBusinessTenant ever
+         | ran. Declaring the order here fixes it for every bound route at once,
+         | rather than every controller having to re-check ownership. (#3, #117)
+         */
+        $middleware->prependToPriorityList(
+            SubstituteBindings::class,
+            SetBusinessTenant::class,
+        );
 
         // Guard-aware auth redirects. The two panels (/admin super-admin vs
         // business app) have independent login screens, so route requests to

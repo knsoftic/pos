@@ -4,10 +4,10 @@ namespace App\Models;
 
 use Database\Factories\BusinessFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -20,7 +20,9 @@ class Business extends Model
     use HasFactory, SoftDeletes;
 
     public const STATUS_ACTIVE = 'active';
+
     public const STATUS_SUSPENDED = 'suspended';
+
     public const STATUS_INACTIVE = 'inactive';
 
     /** @var list<string> */
@@ -50,6 +52,28 @@ class Business extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(Admin::class, 'created_by');
+    }
+
+    // ------------------------------------------------ organisation (Phase 3)
+
+    /**
+     * These three are reached from the operator console, which runs with NO
+     * tenant context — so they are declared here rather than being read off an
+     * ambient scope, and each one is explicitly this business's own.
+     */
+    public function branches(): HasMany
+    {
+        return $this->hasMany(Branch::class);
+    }
+
+    public function posCounters(): HasMany
+    {
+        return $this->hasMany(PosCounter::class);
+    }
+
+    public function roles(): HasMany
+    {
+        return $this->hasMany(Role::class);
     }
 
     // ------------------------------------------------ subscription (Phase 2)

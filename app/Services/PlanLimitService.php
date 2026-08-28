@@ -3,9 +3,11 @@
 namespace App\Services;
 
 use App\Exceptions\LimitExceededException;
+use App\Models\Branch;
 use App\Models\Business;
 use App\Models\BusinessLimitOverride;
 use App\Models\Limit;
+use App\Models\PosCounter;
 use App\Models\User;
 use App\Support\LimitRegistry;
 use App\Support\TenantContext;
@@ -299,18 +301,36 @@ class PlanLimitService
     }
 
     /**
-     * What we can already count in Phase 2. Everything else is registered by the
-     * phase that creates the table, so this list grows instead of this class
-     * accumulating knowledge of tables it cannot see.
+     * What we can already count. Everything else is registered by the phase that
+     * creates the table, so this list grows instead of this class accumulating
+     * knowledge of tables it cannot see.
      *
-     * Trashed users are excluded — an archived employee should not keep occupying
-     * a seat (#104).
+     * Trashed rows are excluded throughout — an archived employee should not keep
+     * occupying a seat, and a deleted branch should not keep occupying a slot
+     * (#104).
+     *
+     * Branch and counter counts deliberately bypass the branch scope
+     * (`allBranches()`): a quota is a fact about the whole business, not about
+     * what the person looking at the screen happens to be allowed to see.
      */
     protected function registerDefaultResolvers(): void
     {
         $this->registerUsageResolver(
             LimitRegistry::EMPLOYEES,
             fn (int $businessId): int => User::query()->forBusiness($businessId)->count(),
+        );
+
+        $this->registerUsageResolver(
+            LimitRegistry::BRANCHES,
+            fn (int $businessId): int => Branch::query()->forBusiness($businessId)->count(),
+        );
+
+        $this->registerUsageResolver(
+            LimitRegistry::POS_COUNTERS,
+            fn (int $businessId): int => PosCounter::query()
+                ->allBranches()
+                ->forBusiness($businessId)
+                ->count(),
         );
     }
 

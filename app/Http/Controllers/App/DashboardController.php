@@ -21,8 +21,10 @@ class DashboardController extends Controller
     {
         $business = $tenant->business();
 
-        // Auto-scoped: returns only THIS business's users.
+        // Auto-scoped: returns only THIS business's users. The role is eager
+        // loaded because the table names it for every row (#167).
         $team = User::query()
+            ->with('role:id,name')
             ->orderByDesc('is_business_owner')
             ->orderBy('name')
             ->take(10)

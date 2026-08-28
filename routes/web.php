@@ -9,7 +9,11 @@ use App\Http\Controllers\Admin\ImpersonationController;
 use App\Http\Controllers\Admin\PlanController;
 use App\Http\Controllers\Admin\SystemNotificationController;
 use App\Http\Controllers\App\BillingController;
+use App\Http\Controllers\App\BranchController;
 use App\Http\Controllers\App\DashboardController as AppDashboardController;
+use App\Http\Controllers\App\EmployeeController;
+use App\Http\Controllers\App\PosCounterController;
+use App\Http\Controllers\App\RoleController;
 use App\Http\Controllers\Auth\AdminLoginController;
 use App\Http\Controllers\Auth\BusinessLoginController;
 use App\Http\Controllers\Auth\NewPasswordController;
@@ -66,6 +70,68 @@ Route::middleware('tenant.app')
         // — see CheckSubscription::$alwaysAllowed.
         Route::get('billing', [BillingController::class, 'index'])->name('billing.index');
         Route::get('billing/plans', [BillingController::class, 'plans'])->name('billing.plans');
+
+        /*
+        |--------------------------------------------------------------------
+        | Organisation — branches, counters, roles, staff (Phase 3)
+        |--------------------------------------------------------------------
+        | Every route carries its own `permission:` gate rather than relying on
+        | a hidden menu (#188). The middleware runs the full three-layer check
+        | (#187), so a permission whose feature is not in the plan is refused
+        | here too — no route needs both `feature:` and `permission:`.
+        |
+        | Reads and writes are split deliberately: seeing the branch list is not
+        | the same authority as changing it.
+        */
+
+        // ---- branches (#47) ------------------------------------------------
+        Route::get('branches', [BranchController::class, 'index'])
+            ->middleware('permission:branches.view')->name('branches.index');
+
+        Route::middleware('permission:branches.manage')->group(function () {
+            Route::get('branches/create', [BranchController::class, 'create'])->name('branches.create');
+            Route::post('branches', [BranchController::class, 'store'])->name('branches.store');
+            Route::get('branches/{branch}/edit', [BranchController::class, 'edit'])->name('branches.edit');
+            Route::put('branches/{branch}', [BranchController::class, 'update'])->name('branches.update');
+            Route::post('branches/{branch}/toggle', [BranchController::class, 'toggle'])->name('branches.toggle');
+            Route::post('branches/{branch}/main', [BranchController::class, 'makeMain'])->name('branches.main');
+            Route::delete('branches/{branch}', [BranchController::class, 'destroy'])->name('branches.destroy');
+        });
+
+        // ---- POS counters (#49) --------------------------------------------
+        Route::middleware('permission:pos_counters.manage')->group(function () {
+            Route::get('counters', [PosCounterController::class, 'index'])->name('counters.index');
+            Route::get('counters/create', [PosCounterController::class, 'create'])->name('counters.create');
+            Route::post('counters', [PosCounterController::class, 'store'])->name('counters.store');
+            Route::get('counters/{counter}/edit', [PosCounterController::class, 'edit'])->name('counters.edit');
+            Route::put('counters/{counter}', [PosCounterController::class, 'update'])->name('counters.update');
+            Route::post('counters/{counter}/toggle', [PosCounterController::class, 'toggle'])->name('counters.toggle');
+            Route::delete('counters/{counter}', [PosCounterController::class, 'destroy'])->name('counters.destroy');
+        });
+
+        // ---- roles & permissions (#51) -------------------------------------
+        Route::middleware('permission:roles.manage')->group(function () {
+            Route::get('roles', [RoleController::class, 'index'])->name('roles.index');
+            Route::get('roles/create', [RoleController::class, 'create'])->name('roles.create');
+            Route::post('roles', [RoleController::class, 'store'])->name('roles.store');
+            Route::get('roles/{role}/edit', [RoleController::class, 'edit'])->name('roles.edit');
+            Route::put('roles/{role}', [RoleController::class, 'update'])->name('roles.update');
+            Route::delete('roles/{role}', [RoleController::class, 'destroy'])->name('roles.destroy');
+        });
+
+        // ---- employees (#50) -----------------------------------------------
+        Route::get('employees', [EmployeeController::class, 'index'])
+            ->middleware('permission:employees.view')->name('employees.index');
+
+        Route::middleware('permission:employees.manage')->group(function () {
+            Route::get('employees/create', [EmployeeController::class, 'create'])->name('employees.create');
+            Route::post('employees', [EmployeeController::class, 'store'])->name('employees.store');
+            Route::get('employees/{employee}/edit', [EmployeeController::class, 'edit'])->name('employees.edit');
+            Route::put('employees/{employee}', [EmployeeController::class, 'update'])->name('employees.update');
+            Route::post('employees/{employee}/toggle', [EmployeeController::class, 'toggle'])->name('employees.toggle');
+            Route::post('employees/{employee}/reset-password', [EmployeeController::class, 'resetPassword'])->name('employees.reset-password');
+            Route::delete('employees/{employee}', [EmployeeController::class, 'destroy'])->name('employees.destroy');
+        });
     });
 
 /*

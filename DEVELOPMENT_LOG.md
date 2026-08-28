@@ -15,7 +15,7 @@
 | **Working Dir** | `C:\xampp\htdocs\pos` |
 | **Environment** | Windows 11 + XAMPP (PHP + MySQL/MariaDB) |
 | **Start Date** | 2026-08-25 |
-| **Current Status** | ✅ **Phase 2 MUKAMMAL (100%)** — Plans + billing cycles + dynamic features + dynamic limits + subscriptions (trial/grace/expiry/upgrade-downgrade/payments) + per-business overrides + poora Super Admin business management (impersonation, notes, alerts) + tenant billing pages. **152 tests / 469 assertions pass** (MySQL `pos_saas_test`). Build + browser verified, console/network zero errors. Git repo init + first commit ho gaya. ➡️ **Next: Phase 3** (Roles + Permissions + Branches + POS Counters + Employees). |
+| **Current Status** | ✅ **Phase 3 MUKAMMAL (100%)** — Roles + permissions (49 codes, 3-layer check), branches + branch-level data control, POS counters, aur employees (role/branch/till/discount cap) mukammal. **222 tests / 772 assertions pass** (MySQL `pos_saas_test`). Build + browser verified (owner aur cashier dono se), console/network zero errors. ➡️ **Next: Phase 4** (Products + Categories + Brands + Units + Inventory). |
 
 ---
 
@@ -38,7 +38,7 @@
 | **0** | Project Foundation & Setup | ✅ Ho gaya | 100% |
 | **1** | Auth + Super Admin + Tenant Architecture + DB Foundation | ✅ Ho gaya | 100% |
 | **2** | Plans + Subscriptions + Features + Limits + Businesses | ✅ Ho gaya | 100% |
-| **3** | Roles + Permissions + Branches + POS Counters + Employees | ⬜ Baqi | 0% |
+| **3** | Roles + Permissions + Branches + POS Counters + Employees | ✅ Ho gaya | 100% |
 | **4** | Products + Categories + Brands + Units + Inventory | ⬜ Baqi | 0% |
 | **5** | Customers + Suppliers (+ Ledgers) | ⬜ Baqi | 0% |
 | **6** | Purchases + Supplier Ledger | ⬜ Baqi | 0% |
@@ -49,15 +49,78 @@
 | **11** | Settings + Receipt + QR + Barcode | ⬜ Baqi | 0% |
 | **12** | Public Website + Pricing + Trial Registration | ⬜ Baqi | 0% |
 | **13** | Animations + UI Polish + Performance | ⬜ Baqi | 0% |
-| **14** | Security + Testing | 🔄 Chal raha hai | ~20% |
+| **14** | Security + Testing | 🔄 Chal raha hai | ~25% |
 | **15** | Deployment Preparation | ⬜ Baqi | 0% |
-| | **TOTAL PROGRESS** | 🟢 | **~25%** |
+| | **TOTAL PROGRESS** | 🟢 | **~31%** |
 
 ---
 
 ## 📝 Session Log (Kaam ki History)
 
 > Naya kaam upar add karo (newest first). Har entry mein: **date**, **kya hua**, **kya next hai**.
+
+### 2026-08-28 — Phase 3 MUKAMMAL ✅ (Roles + Permissions + Branches + POS Counters + Employees)
+
+Ab sawal sirf "plan mein hai ya nahi" nahi raha — **"ye banda kar sakta hai ya nahi"** aur **"ye banda dekh sakta hai ya nahi"** bhi enforce hota hai. Teeno layer (#187) ek jagah, `PermissionService` mein.
+
+**✅ JO HO GAYA:**
+
+**1) Database — 5 nayi migrations**
+- `branches` (name/code/phone/email/address/city/is_main/is_active + created_by/updated_by + softDeletes; code business ke andar unique aur **archive ke baad bhi reserved**), `pos_counters` (branch ke andar, business_id bhi store hota hai taake tenant scope bina join ke chal sake), `roles` (per-business, slug unique, `is_system` = starter preset), `role_permissions` (role_id + permission string), aur `users` mein **role_id / branch_id / pos_counter_id / max_discount_percent** (chaaron **guarded** — form se set nahi ho sakte).
+- **Design faisla:** Owner koi role nahi hai. `users.is_business_owner` account ki property hai jo role system se pehle check hoti hai — warna koi role edit kar ke owner ko uske apne business se bahar kar sakta tha.
+
+**2) Permission vocabulary — `Support/PermissionRegistry.php`**
+- **49 codes**, `module.action` shakal mein, 10 groups mein; **24 sensitive** (#52 — cost/profit dekhna, invoice void, refunds, exports, aur wo sab jo doosron ke ikhtiyaar badalta hai).
+- Har code ke saath optional **`feature`** — yani ye permission kis subscription feature pe khari hai (#187 layer 1). Registry vocabulary hai, **roles tenant ka data hain** (#190).
+- ⚠️ Ek asli bug test ne pakra: `inventory.stock_take` **dono** registries mein tha (feature bhi, permission bhi). Permission ko `inventory.stock_count` kar diya, aur ek test likh diya jo hamesha check karta hai ke dono vocabularies **kabhi na takrayein**.
+
+**3) 3-layer access check — `Services/PermissionService.php` (#187, #188)**
+- Order: **feature → role → tenant** ka mixture, magar message ke liye tarteeb ahem hai: pehle feature (taake user ko "upgrade karo" bataya jaye), phir role (owner role system se upar), aur tenant check (defence-in-depth — doosre business ka user kabhi pass na kare).
+- `allows/denies/allOf/anyOf/authorize/all/grantableCodes/grantableGrouped/dormantCodesFor`.
+- **Gates:** har registry code ke liye `Gate::define()` — Blade mein `@can('employees.view')` chalta hai. **Jaan boojh kar koi `Gate::before` owner-bypass nahi** rakha: owner ka shortcut service ke andar hai, taake Gate aur service ka jawab kabhi mukhtalif na ho.
+- **Middleware `permission:`** — HTML pe redirect + wajah, API pe **403 JSON**, aur ghalat code likho to **loudly fail**. Chunke service teeno layer chalati hai, kisi route pe `feature:` aur `permission:` dono lagane ki zaroorat nahi.
+
+**4) Branch data control — `Support/BranchContext.php` + `Scopes/BranchScope.php` + `Concerns/BelongsToBranch.php` (#48, #138)**
+- Rule: **Owner → sab branches; jis ka branch hai → sirf wahi; jis ka branch nahi → kuch bhi nahi** (fail closed).
+- Tenant scope ke **neeche** chalta hai — business pehle, phir uske andar ki shops. Ye kabhi widen nahi kar sakta.
+- `SetBusinessTenant` ise bhi authenticated user se resolve karta hai, request se kabhi nahi.
+- Abhi `PosCounter` pe laga hua hai (asli enforcement, theory nahi); Phase 4+ ke sales/stock models sirf trait laga kar isi mein aa jayenge.
+
+**5) Services (thin controllers, #98)**
+- `RoleService` — 3 starter roles (Manager / Cashier / Stock Keeper) har naye business mein **copy** hote hain (editable rows, policy nahi), CRUD, aur **dormant permissions preserve** karta hai: downgrade pe jo permission plan se nikal gayi wo role mein rehti hai (editor use dikhata hi nahi), upgrade pe dobara chal padti hai.
+- `BranchService` — main branch guarantee, doosri branch pe **multi-branch feature** ka gate, quota gate, make-main, close/reopen, delete sirf jab khali ho (#104).
+- `PosCounterService` — wahi do gates + teesra: till us branch mein hi lag sakti hai **jo acting user reach kar sakta ho**.
+- `EmployeeService` — seat quota + multi-user feature, role/branch/counter ki **tenant-scoped validation**, counter aur branch ka match zaroori, **apne aap ko band karna na-mumkin**, owner ko band/delete karna na-mumkin, password reset, soft delete (seat free, record baqi).
+- `OrganizationProvisioner` — naya business = main branch + pehli till + starter roles. Operator console, seeder aur tests **teeno yahi call karte hain**, taake har tenant ek jaisa bane.
+
+**6) UI**
+- 4 naye screens: **Roles** (permission editor — groups, sensitive badges, select-all, dormant list), **Branches**, **POS Counters**, **Employees** — sab meters aur feature-aware empty states ke saath.
+- **Sidebar ab do gates se filter hota hai**: feature (plan) + permission (banda). Cashier ko Employees/Roles/POS Counters/Settings dikhte hi nahi.
+- Dashboard: asli role names (Owner / Cashier / Manager, aur bina role wale pe amber badge), `<x-flash />` add kiya taake refuse hone ki wajah nazar aaye.
+
+**7) ⚠️ Tests — 70 naye, sab PASS**
+- `Organization/RolePermissionTest` (31), `Organization/BranchAccessTest` (19), `Organization/EmployeeTest` (20).
+- **Result: `php artisan test` → 222 tests / 772 assertions PASS** (MySQL `pos_saas_test`).
+
+**8) Build + browser verification**
+- `npm run build` — app.css 101.99 → **102.85 kB** (gzip 16.55), JS waise ka waisa 50.33 kB.
+- ✅ Owner se: Branches, Roles (editor khula), Employees (**form se naya employee "Sara Malik" banaya — Manager role, Main Branch, 25% cap**), POS Counters — sab sahi, meters update hue (2/10 → 3/10).
+- ✅ **Cashier se login**: sidebar mein sirf Dashboard/POS/Sales/Products/Customers/Branches/Billing — Employees, Roles, POS Counters, Settings **ghayab**. `/app/employees` direct kholne pe wapas dashboard + saaf message: *"You do not have permission to view employees."*
+- Zero console errors, zero failed requests.
+
+**🐞 Testing ne 3 asli cheezein pakrin:**
+1. **⚠️ Route model binding tenant se PEHLE chal raha tha** — sab se sanjeeda. `SubstituteBindings` `web` group mein hai jo route ke apne middleware se **pehle** chalta hai, is liye `/app/roles/{role}` bina tenant context ke lookup karta tha aur **doosre business ka record 200 ke saath khol deta tha**. Fix: `bootstrap/app.php` mein `prependToPriorityList(SubstituteBindings::class, SetBusinessTenant::class)` — ab har bound route (roles, branches, counters, employees) ek saath mehfooz hai. Cross-tenant 404 ke tests teeno modules pe likhe hain.
+2. **Permission/feature code collision** (upar #2) — ab ek test isay rok deta hai.
+3. **Test fixture ka gotcha:** tenant context active hote hue `Model::factory()->for($otherBusiness)->create()` **kaam nahi karta** — `BelongsToTenant` ka creating hook business_id ko active context se stamp kar deta hai, to "doosre tenant ka" record asal mein isi tenant mein ban jata hai aur cross-tenant test ghalat wajah se pass ho jata hai. Ab `inAnotherBusiness()` helper `runFor()` ke through fixture banata hai (comment ke saath).
+
+**⏭️ Deliberately deferred (wajah ke saath):**
+- **Policies (`app/Policies/`)** — abhi har check module/action level ka hai, per-row ownership wali koi table hai hi nahi. Jab Phase 4/7 mein "apni hi sale edit kar sakta hai" jaisa sawal aayega, tab Policy banegi; Gates aur `PermissionService` pehle se tayyar hain.
+- **Discount cap ka POS enforcement** — cap store aur `mayDiscount()` tested hai; asli rok Phase 7 ki sale screen pe lagegi (#141).
+- **`BelongsToBranch` sirf counters pe** — baqi models abhi bane hi nahi.
+- **Attendance / commission (#TEAM_ATTENDANCE, TEAM_COMMISSION)** — features registry mein hain, module Phase 13+ ya jab spec kahe.
+
+➡️ **Next: Phase 4** — Products + Categories + Brands + Units + Inventory (yahan `Blameable` + `BelongsToBranch` + limit usage resolvers ka asli imtihan hoga).
+
 
 ### 2026-08-26/28 — Phase 2 MUKAMMAL ✅ (Plans + Subscriptions + Features + Limits + Business Management)
 
@@ -289,7 +352,7 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 - [x] `BusinessTenant` middleware *(`SetBusinessTenant`)* — #130
 - [x] Current Business Context resolver (request se `business_id` blindly na lo) *(`TenantContext`, sirf auth user se)* — #131, #197
 - [x] Mass assignment protection (`business_id` override rok) *(guarded + creating-hook force)* — #132
-- [ ] `created_by` / `updated_by` tracking *(⚙️ `Blameable` trait ready — Phase 4+ tables pe attach hoga)* — #3
+- [x] `created_by` / `updated_by` tracking *(`Blameable` ab **attached** hai — branches, pos_counters aur roles pe; har nayi table isay le kar aayegi)* — #3
 
 ### Database Foundation
 - [x] Core migrations (users, businesses, admins, audit_logs) *(business_user pivot ke bajaye direct `business_id` design)* — #65, #113
@@ -366,24 +429,24 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 *(Spec ref: #4, #47–52, #138, #140–141, #187–188)*
 
 ### Roles & Permissions
-- [ ] Module/action based permission system — #51
-- [ ] Custom roles (Business Owner creates) — #51
-- [ ] Sensitive permissions (view cost/profit, delete/cancel invoice, exports) — #52
-- [ ] **3-layer access check: Subscription Feature + User Permission + Tenant** — #187
-- [ ] `RolePermission` middleware + Policies/Gates — #130, #188
+- [x] Module/action based permission system — #51 *(`Support/PermissionRegistry` — 49 codes, `module.action`, 10 groups; ek test ye bhi check karta hai ke permission aur feature codes kabhi na takrayein)*
+- [x] Custom roles (Business Owner creates) — #51 *(`roles` + `role_permissions` per-business; 3 starter roles har naye tenant mein copy hote hain — editable, deletable nahi)*
+- [x] Sensitive permissions (view cost/profit, delete/cancel invoice, exports) — #52 *(24 codes `sensitive` flagged; editor mein amber badge)*
+- [x] **3-layer access check: Subscription Feature + User Permission + Tenant** — #187 *(`Services/PermissionService` — feature pehle taake user ko "upgrade" bataya jaye, phir role, phir tenant; owner role system se upar magar plan se upar nahi)*
+- [x] `RolePermission` middleware + Policies/Gates — #130, #188 *(`permission:` middleware + har code ka `Gate::define()`; jaan boojh kar koi `Gate::before` owner-bypass nahi — warna Gate aur service ka jawab alag ho sakta tha. `Policies/` Phase 4+ mein jab per-row ownership wale models aayenge)*
 
 ### Branches
-- [ ] Branch management CRUD — #47
-- [ ] Branch data control (Owner=all, Manager=own, Cashier=own POS) — #48
+- [x] Branch management CRUD — #47 *(`BranchService`; main branch guarantee, code archive ke baad bhi reserved, delete sirf khali branch ka #104)*
+- [x] Branch data control (Owner=all, Manager=own, Cashier=own POS) — #48 *(`BranchContext` + `BranchScope` + `BelongsToBranch`; tenant scope ke NEECHE chalta hai — narrow kar sakta hai, widen kabhi nahi. Branch na ho to kuch nahi dikhta)*
 
 ### POS Counters
-- [ ] POS counter management (per branch) — #49
+- [x] POS counter management (per branch) — #49 *(`PosCounterService`; multi-counter feature + quota + "sirf apni reachable branch mein")*
 
 ### Employees
-- [ ] Employee management (form + role + branch + POS assign) — #50
-- [ ] Branch-level employee access (primary branch) — #138
-- [ ] Discount restrictions (cashier max discount %) — #141
-- [ ] Returns permission (separate) — #140
+- [x] Employee management (form + role + branch + POS assign) — #50 *(`EmployeeService`; role/branch/counter sab tenant-scoped validate hote hain, ownership kabhi transfer nahi hoti)*
+- [x] Branch-level employee access (primary branch) — #138 *(`users.branch_id` → `BranchContext`; deactivate karte hi agli request pe session khatam)*
+- [x] Discount restrictions (cashier max discount %) — #141 *(`users.max_discount_percent` — blank = koi cap nahi, **0 = bilkul discount nahi**; `mayDiscount()` tested. POS screen pe asli rok Phase 7)*
+- [x] Returns permission (separate) — #140 *(`sales.return` alag permission, sensitive, aur `sales.returns` feature pe khari)*
 
 ---
 
@@ -602,7 +665,7 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 
 ### Testing
 - [x] Feature tests: Tenant Isolation — #116, #117 *(`TenantIsolationTest` — 16 tests: scoped reads/aggregates, cross-tenant `find()` → null, creating-hook force, mass-assignment, escape hatches, HTTP isolation)*
-- [x] Feature tests: Login *(`Auth/AuthenticationTest` ~20 + `Auth/PasswordResetTest` 11 — dono guards + cross-guard denial + throttle + enumeration safety)* — #116 · ⬜ Permissions *(→ Phase 3 mein banenge)*
+- [x] Feature tests: Login + Permissions *(`Auth/AuthenticationTest` 22 + `Auth/PasswordResetTest` 11 + `Organization/RolePermissionTest` 31 — dono guards, cross-guard denial, throttle, enumeration safety, aur poora 3-layer permission check)* — #116
 - [x] Feature tests: Plan Limits, Plan Features — #116 *(`Subscription/PlanLimitTest` 29 + `Subscription/PlanFeatureTest` 21 — resolution order, unlimited, enforcement, cache invalidation, `CheckFeature` middleware)*
 - [ ] Feature tests: POS Sale, Stock Update — #116
 - [ ] Feature tests: Purchase, Returns — #116
@@ -610,7 +673,7 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 - [x] Feature tests: Subscription Expiry — #116 *(`Subscription/SubscriptionExpiryTest` 26 + `Subscription/SubscriptionGateTest` 22 — trial/grace/expiry, lock vs read-only vs pos-off, stale status column dono taraf se)*
 - [x] ⚠️ Tenant leak test (Business A → Business B URL = 403/404) — #117 *(cross-tenant PK `find()` → null; dashboard HTTP test dono tenants pe; request input se tenant switch block)*
 
-> **Ab tak ka test status:** `php artisan test` → **152 tests / 469 assertions PASS** (MySQL `pos_saas_test`) — Auth 22 · PasswordReset 11 · TenantIsolation 20 · PlanLimit 29 · PlanFeature 21 · SubscriptionExpiry 26 · SubscriptionGate 22 · Unit 1. Har naye phase ke saath yahan tests barhte rahenge.
+> **Ab tak ka test status:** `php artisan test` → **222 tests / 772 assertions PASS** (MySQL `pos_saas_test`) — Auth 22 · PasswordReset 11 · TenantIsolation 20 · PlanLimit 29 · PlanFeature 21 · SubscriptionExpiry 26 · SubscriptionGate 22 · RolePermission 31 · BranchAccess 19 · Employee 20 · Unit 1. Har naye phase ke saath yahan tests barhte rahenge.
 
 ---
 

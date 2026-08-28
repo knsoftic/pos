@@ -6,11 +6,13 @@ use App\Enums\BillingCycle;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\BusinessRequest;
 use App\Models\Business;
+use App\Models\Feature;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Services\AuditService;
 use App\Services\FeatureService;
+use App\Services\OrganizationProvisioner;
 use App\Services\PlanLimitService;
 use App\Services\SubscriptionService;
 use App\Support\FeatureRegistry;
@@ -34,6 +36,7 @@ class BusinessController extends Controller
         protected SubscriptionService $subscriptions,
         protected FeatureService $features,
         protected PlanLimitService $limits,
+        protected OrganizationProvisioner $organization,
         protected AuditService $audit,
     ) {}
 
@@ -164,6 +167,11 @@ class BusinessController extends Controller
                 $business->id,
             );
 
+            // Main branch + first till + starting roles. Done before the
+            // subscription so a tenant is never entitled to a POS it has no
+            // counter for.
+            $this->organization->provision($business);
+
             if ($wantsTrial) {
                 $this->subscriptions->startTrial(
                     $business,
@@ -206,7 +214,7 @@ class BusinessController extends Controller
             'users' => User::query()->forBusiness($business->id)->orderByDesc('is_business_owner')->get(),
             'meters' => $this->limits->meters(null, $business),
             'featureMap' => $this->features->all($business),
-            'featureGroups' => \App\Models\Feature::query()->where('is_active', true)->ordered()->get()->groupBy('group'),
+            'featureGroups' => Feature::query()->where('is_active', true)->ordered()->get()->groupBy('group'),
             'featureGroupLabels' => FeatureRegistry::groupLabels(),
             'limitGroupLabels' => LimitRegistry::groupLabels(),
             'featureOverrides' => $business->featureOverrides()->with('feature:id,code,name')->get()->keyBy('feature_id'),

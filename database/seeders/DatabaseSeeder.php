@@ -6,7 +6,9 @@ use App\Enums\BillingCycle;
 use App\Models\Admin;
 use App\Models\Business;
 use App\Models\Plan;
+use App\Models\Role;
 use App\Models\User;
+use App\Services\OrganizationProvisioner;
 use App\Services\SubscriptionService;
 use Illuminate\Database\Seeder;
 
@@ -68,10 +70,43 @@ class DatabaseSeeder extends Seeder
 
         $this->seedSubscriptions($store, $shop);
 
+        // Branches, tills and the starting roles — through the same provisioner
+        // the operator console uses, so a seeded tenant is shaped exactly like a
+        // real one (#47, #49, #51).
+        $this->seedOrganization($store, $shop);
+
         $this->command?->info('Seeded accounts (password = "password"):');
         $this->command?->info('  Super admin  → superadmin@pos.test   (/admin/login)');
         $this->command?->info('  Business #1  → owner@demo.test        (/login)  [Professional, paid]');
         $this->command?->info('  Business #2  → owner2@demo.test       (/login)  [Starter, trial]');
+        $this->command?->info('  Employee     → cashier@demo.test      (/login)  [Cashier role, Main Branch]');
+    }
+
+    /**
+     * Provisioning runs AFTER the subscriptions on purpose: the branch and
+     * counter services check the plan's features and quotas, so a tenant with no
+     * entitlement yet would be refused its own first branch.
+     */
+    protected function seedOrganization(Business $store, Business $shop): void
+    {
+        $provisioner = app(OrganizationProvisioner::class);
+
+        $provisioner->provision($store);
+        $provisioner->provision($shop);
+
+        // Put the demo cashier on the Cashier role and the main branch, so the
+        // permission gates and the branch scope both have something to show.
+        $cashierRole = Role::query()->forBusiness($store->id)->where('slug', 'cashier')->first();
+        $mainBranch = $store->branches()->where('is_main', true)->first();
+
+        User::query()
+            ->forBusiness($store->id)
+            ->where('email', 'cashier@demo.test')
+            ->update([
+                'role_id' => $cashierRole?->id,
+                'branch_id' => $mainBranch?->id,
+                'max_discount_percent' => 10,
+            ]);
     }
 
     /**

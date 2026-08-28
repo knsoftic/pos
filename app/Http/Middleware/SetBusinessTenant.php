@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\BranchContext;
 use App\Support\TenantContext;
 use Closure;
 use Illuminate\Http\Request;
@@ -21,7 +22,10 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class SetBusinessTenant
 {
-    public function __construct(protected TenantContext $tenant) {}
+    public function __construct(
+        protected TenantContext $tenant,
+        protected BranchContext $branch,
+    ) {}
 
     public function handle(Request $request, Closure $next): Response
     {
@@ -54,6 +58,11 @@ class SetBusinessTenant
         }
 
         $this->tenant->setBusiness($business);
+
+        // Which branches this person may reach (#48, #138). Same rule as the
+        // tenant: derived from the authenticated user, never from the request,
+        // and it can only narrow what the tenant scope already allows.
+        $this->branch->forUser($user);
 
         // Make the tenant available to every view without per-controller wiring.
         view()->share('currentBusiness', $business);
