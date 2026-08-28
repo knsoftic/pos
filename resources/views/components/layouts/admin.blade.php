@@ -28,7 +28,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ $title ? $title . ' · ' : '' }}Operator Console</title>
+    <title>{{ $title ? $title . ' · ' : '' }}Operator Console · {{ config('brand.name') }}</title>
+
+    <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
 
     <script>
         (function () {
@@ -62,15 +64,18 @@
                   transition-transform duration-200 dark:border-r dark:border-slate-800 lg:translate-x-0"
            :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'">
 
-        <div class="flex h-16 items-center gap-2.5 border-b border-white/10 px-5">
-            <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm">
-                <x-icon name="shield" class="h-5 w-5" />
-            </div>
-            <div class="leading-tight">
-                <span class="block text-sm font-bold tracking-tight text-white">Operator Console</span>
-                <span class="block text-[11px] text-slate-400">Super Admin</span>
-            </div>
-        </div>
+        {{-- The operator console is KN Softic's own room, so the company name
+             leads here rather than any tenant's. --}}
+        <a href="{{ route('admin.dashboard') }}"
+           class="flex h-16 items-center gap-2.5 border-b border-white/10 px-5 transition-colors hover:bg-white/5">
+            <x-brand.mark class="h-9 w-9" rounded="rounded-xl" />
+            <span class="min-w-0 leading-tight">
+                <span class="block truncate text-sm font-bold tracking-tight text-white">
+                    KN<span class="font-medium text-slate-400">&nbsp;Softic</span>
+                </span>
+                <span class="block truncate text-[11px] text-slate-400">Operator Console</span>
+            </span>
+        </a>
 
         <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-4">
             @foreach ($nav as $item)
@@ -93,8 +98,10 @@
             @endforeach
         </nav>
 
-        <div class="border-t border-white/10 p-4 text-[11px] text-slate-500">
-            {{ config('app.name', 'POS SaaS') }} · Operator
+        <div class="space-y-1.5 border-t border-white/10 p-4 text-[11px] text-slate-500">
+            <p class="font-medium text-slate-400">{{ config('brand.product') }}</p>
+            <p>v{{ config('brand.version') }}</p>
+            <p>&copy; {{ now()->format('Y') }} {{ config('brand.legal_name') }}</p>
         </div>
     </aside>
 
@@ -105,7 +112,7 @@
                 <x-icon name="menu" />
             </button>
 
-            <span class="badge-slate">SaaS Operator</span>
+            <span class="badge-brand">{{ config('brand.name') }} · Operator</span>
 
             <div class="ml-auto flex items-center gap-1.5">
                 {{-- #179 Alert bell. The dropdown is a summary; the page has the detail. --}}
@@ -203,6 +210,10 @@
         <main class="flex-1 p-4 sm:p-6">
             {{ $slot }}
         </main>
+
+        <footer class="border-t border-slate-200 px-4 py-4 dark:border-slate-800 sm:px-6">
+            <x-brand.footer align="between" :version="true" />
+        </footer>
     </div>
 
     @livewireScripts

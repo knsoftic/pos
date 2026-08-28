@@ -4,8 +4,13 @@
     {
       "name": "pos",
       "runtimeExecutable": "php",
-      "runtimeArgs": ["artisan", "serve", "--port=8000"],
-      "port": 8000
+      "runtimeArgs": [
+        "artisan",
+        "serve",
+        "--port=8000"
+      ],
+      "port": 8000,
+      "autoPort": false
     }
   ]
 }

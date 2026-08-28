@@ -1,4 +1,4 @@
-# 🔑 Demo Login Details
+# 🔑 KN Softic POS — Demo Login Details
 
 > ⚠️ **Sirf local development ke liye.** Ye sab accounts `DatabaseSeeder` banata hai aur inka password
 > ek hi hai. Production pe deploy karne se pehle **saare demo accounts delete ya password change karna
@@ -13,6 +13,7 @@
 | | |
 |---|---|
 | **URL** | http://localhost:8000/admin/login |
+| **Panel** | KN Softic Operator Console |
 | **Email** | `superadmin@pos.test` |
 | **Password** | `password` |
 

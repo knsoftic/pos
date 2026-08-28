@@ -81,7 +81,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ $title ? $title . ' · ' : '' }}{{ $business?->name ?? config('app.name', 'POS SaaS') }}</title>
+    {{-- The tenant's OWN name leads here, not the vendor's: this is their
+         workspace. See the note in config/brand.php. --}}
+    <title>{{ $title ? $title . ' · ' : '' }}{{ $business?->name ?? config('brand.product') }}</title>
+
+    <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
 
     {{-- Set theme before paint to avoid flash --}}
     <script>
@@ -136,20 +140,21 @@
                   transition-transform duration-200 dark:border-slate-800 dark:bg-slate-900 lg:translate-x-0"
            :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'">
 
-        {{-- Brand / current business --}}
-        <div class="flex h-16 items-center gap-2.5 border-b border-slate-200 px-5 dark:border-slate-800">
-            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm">
-                <x-icon name="pos" class="h-5 w-5" />
-            </div>
-            <div class="min-w-0 leading-tight">
+        {{-- THE BUSINESS's identity, not the vendor's. The KN Softic mark is
+             here as the product tile, but the name that reads first is the
+             shop's own — their staff work in their shop, not in ours. --}}
+        <a href="{{ route('app.dashboard') }}"
+           class="flex h-16 items-center gap-2.5 border-b border-slate-200 px-5 transition-colors hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/50">
+            <x-brand.mark class="h-9 w-9" rounded="rounded-xl" />
+            <span class="min-w-0 leading-tight">
                 <span class="block truncate text-sm font-bold tracking-tight text-slate-900 dark:text-white">
-                    {{ $business?->name ?? config('app.name', 'POS SaaS') }}
+                    {{ $business?->name ?? config('brand.product') }}
                 </span>
                 <span class="block truncate text-[11px] text-slate-400">
-                    {{ $layoutSubscription?->plan?->name ?? config('app.name', 'POS SaaS') }}
+                    {{ $layoutSubscription?->plan?->name ?? config('brand.tagline') }}
                 </span>
-            </div>
-        </div>
+            </span>
+        </a>
 
         {{-- Nav --}}
         <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-4">
@@ -193,6 +198,10 @@
                 @else
                     <p class="text-[11px] text-slate-400">No active plan — quotas do not apply.</p>
                 @endif
+            </div>
+
+            <div class="mt-3 flex justify-center">
+                <x-brand.powered-by />
             </div>
         </div>
     </aside>
@@ -281,6 +290,18 @@
         <main class="flex-1 p-4 sm:p-6">
             {{ $slot }}
         </main>
+
+        <footer class="border-t border-slate-200 px-4 py-4 dark:border-slate-800 sm:px-6">
+            <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs text-slate-400">
+                <span>{{ $business?->name }}</span>
+                <span class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <a href="mailto:{{ config('brand.support_email') }}"
+                       class="transition-colors hover:text-brand-600 dark:hover:text-brand-300">Support</a>
+                    <span class="opacity-70">v{{ config('brand.version') }}</span>
+                    <x-brand.powered-by />
+                </span>
+            </div>
+        </footer>
     </div>
 
     @livewireScripts

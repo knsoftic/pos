@@ -1,0 +1,16 @@
+<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- KN Softic mark. Kept in sync by hand with
+       resources/views/components/brand/mark.blade.php - the browser asks for
+       this file before any Blade renders, so it cannot be the same component. -->
+  <defs>
+    <linearGradient id="knFavicon" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3366ff"/>
+      <stop offset="1" stop-color="#1a3fd0"/>
+    </linearGradient>
+  </defs>
+  <rect width="48" height="48" rx="12" fill="url(#knFavicon)"/>
+  <rect x="12.5" y="13" width="4.6" height="22" rx="2.3" fill="white"/>
+  <path d="M22 13.8 L32.4 24 L22 34.2" stroke="white" stroke-width="4.6"
+        stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <circle cx="36.4" cy="15.6" r="2.4" fill="white" fill-opacity="0.55"/>
+</svg>

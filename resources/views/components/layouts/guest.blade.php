@@ -6,7 +6,13 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ $title }} · {{ config('app.name', 'POS SaaS') }}</title>
+
+    {{-- The sign-in screens are KN Softic's own surface, so the product name
+         leads here — unlike /app, where the tenant's business name does. --}}
+    <title>{{ $title }} · {{ config('brand.product') }}</title>
+    <meta name="description" content="{{ config('brand.description') }}">
+
+    <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
 
     <script>
         (function () {
@@ -44,18 +50,22 @@
         <x-icon name="sun" class="hidden h-5 w-5 dark:block" />
     </button>
 
-    <div class="flex min-h-full flex-col items-center justify-center px-4 py-12">
+    <div class="flex min-h-full flex-col items-center justify-center px-4 py-10 sm:py-12">
         <div class="w-full max-w-sm">
             {{-- Brand --}}
             <div class="mb-8 flex flex-col items-center text-center">
-                <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-lg shadow-brand-600/25">
-                    <x-icon :name="$icon" class="h-7 w-7" />
-                </div>
+                <x-brand.mark class="h-14 w-14" rounded="rounded-2xl" />
+
                 <h1 class="mt-4 text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-                    {{ config('app.name', 'POS SaaS') }}
+                    KN<span class="font-medium text-slate-500 dark:text-slate-400">&nbsp;Softic</span>
                 </h1>
+
+                <p class="mt-1 text-sm font-medium text-brand-700 dark:text-brand-300">
+                    {{ config('brand.tagline') }}
+                </p>
+
                 @if ($subtitle)
-                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $subtitle }}</p>
+                    <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">{{ $subtitle }}</p>
                 @endif
             </div>
 
@@ -67,6 +77,8 @@
             @isset($footer)
                 <p class="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">{{ $footer }}</p>
             @endisset
+
+            <x-brand.footer class="mt-8" />
         </div>
     </div>
 
