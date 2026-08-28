@@ -15,6 +15,7 @@
 | **Working Dir** | `C:\xampp\htdocs\pos` |
 | **Environment** | Windows 11 + XAMPP (PHP + MySQL/MariaDB) |
 | **Start Date** | 2026-08-25 |
+| **Demo logins** | [](LOGIN_CREDENTIALS.md) — seeded accounts (dev only, #191) |
 | **Current Status** | ✅ **Phase 3 MUKAMMAL (100%)** — Roles + permissions (49 codes, 3-layer check), branches + branch-level data control, POS counters, aur employees (role/branch/till/discount cap) mukammal. **222 tests / 772 assertions pass** (MySQL `pos_saas_test`). Build + browser verified (owner aur cashier dono se), console/network zero errors. ➡️ **Next: Phase 4** (Products + Categories + Brands + Units + Inventory). |
 
 ---
