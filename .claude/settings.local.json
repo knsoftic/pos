@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n 'function \\\\|protected $fillable\\\\|protected $casts' app/Models/BusinessNote.php app/Models/Subscription.php)",
+      "Bash(grep -n 'class\\\\|protected $fillable\\\\|function \\\\|=> ' app/Models/Limit.php)",
+      "Bash(php artisan *)",
+      "Bash(tasklist)",
+      "Bash(echo \"--- exit: $? ---\")",
+      "Read(//c/xampp/mysql/bin/**)",
+      "Bash(./mysqld.exe --defaults-file=/c/xampp/mysql/bin/my.ini --standalone)",
+      "Bash(/c/xampp/mysql/bin/mysql.exe -u root -e \"show databases;\")",
+      "Bash(grep -n \"subscriptions', \\\\[BusinessSubscriptionController\\\\|use App\\\\\\\\\\\\\\\\Http\\\\\\\\\\\\\\\\Controllers\\\\\\\\\\\\\\\\Admin\" routes/web.php)"
+    ]
+  }
+}
