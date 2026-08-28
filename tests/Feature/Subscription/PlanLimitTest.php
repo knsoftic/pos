@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Subscription;
 
+use App\Enums\BillingCycle;
 use App\Exceptions\LimitExceededException;
 use App\Models\Business;
 use App\Models\BusinessLimitOverride;
@@ -10,6 +11,7 @@ use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Services\PlanLimitService;
+use App\Services\SubscriptionService;
 use App\Support\LimitRegistry;
 use Database\Seeders\LimitSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -259,13 +261,19 @@ class PlanLimitTest extends TestCase
 
     public function test_a_code_with_no_registered_counter_reports_zero_usage(): void
     {
-        // Later phases register their own counters; until then the ceiling still
-        // applies, usage is simply unknown-as-zero. That is safe, not a bypass.
-        $this->subscribeTo([LimitRegistry::PRODUCTS => 500]);
+        /*
+         | Later phases register their own counters; until then the ceiling still
+         | applies, usage is simply unknown-as-zero. That is safe, not a bypass.
+         |
+         | This used to be asserted with `limits.products`, which Phase 4 now
+         | counts for real — so the example moved to invoices, which Phase 7 will
+         | claim in turn. The rule under test is the design, not the code.
+         */
+        $this->subscribeTo([LimitRegistry::INVOICES_PER_MONTH => 500]);
 
-        $this->assertFalse($this->limits()->hasUsageResolver(LimitRegistry::PRODUCTS));
-        $this->assertSame(0, $this->limits()->usage(LimitRegistry::PRODUCTS, $this->business));
-        $this->assertSame(500, $this->limits()->limit(LimitRegistry::PRODUCTS, $this->business));
+        $this->assertFalse($this->limits()->hasUsageResolver(LimitRegistry::INVOICES_PER_MONTH));
+        $this->assertSame(0, $this->limits()->usage(LimitRegistry::INVOICES_PER_MONTH, $this->business));
+        $this->assertSame(500, $this->limits()->limit(LimitRegistry::INVOICES_PER_MONTH, $this->business));
     }
 
     public function test_a_registered_resolver_is_used(): void
@@ -468,8 +476,8 @@ class PlanLimitTest extends TestCase
 
         $cheaper = Plan::factory()->monthly(9.00)->withLimits([LimitRegistry::PRODUCTS => 50])->create();
 
-        app(\App\Services\SubscriptionService::class)
-            ->changePlan($this->business, $cheaper, \App\Enums\BillingCycle::Monthly);
+        app(SubscriptionService::class)
+            ->changePlan($this->business, $cheaper, BillingCycle::Monthly);
 
         $this->assertSame(
             50,

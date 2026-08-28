@@ -15,8 +15,8 @@
 | **Working Dir** | `C:\xampp\htdocs\pos` |
 | **Environment** | Windows 11 + XAMPP (PHP + MySQL/MariaDB) |
 | **Start Date** | 2026-08-25 |
-| **Demo logins** | [](LOGIN_CREDENTIALS.md) — seeded accounts (dev only, #191) |
-| **Current Status** | ✅ **Phase 3 MUKAMMAL (100%)** — Roles + permissions (49 codes, 3-layer check), branches + branch-level data control, POS counters, aur employees (role/branch/till/discount cap) mukammal. **222 tests / 772 assertions pass** (MySQL `pos_saas_test`). Build + browser verified (owner aur cashier dono se), console/network zero errors. ➡️ **Next: Phase 4** (Products + Categories + Brands + Units + Inventory). |
+| **Demo logins** | [LOGIN_CREDENTIALS.md](LOGIN_CREDENTIALS.md) — seeded accounts (dev only, #191) |
+| **Current Status** | 🔄 **Phase 4 chal raha hai (~40%)** — Catalog (products, categories, subcategories, brands, units, variants, auto-barcode) **mukammal**; **inventory abhi baqi hai** (stock, movements, adjustments, transfers). Phases 0–3 mukammal. **269 tests / 886 assertions pass** (MySQL `pos_saas_test`). Build + browser verified, console/network zero errors. ➡️ **Next: Phase 4 Session 2** — `InventoryService` + per-branch stock + movement ledger. |
 
 ---
 
@@ -40,7 +40,7 @@
 | **1** | Auth + Super Admin + Tenant Architecture + DB Foundation | ✅ Ho gaya | 100% |
 | **2** | Plans + Subscriptions + Features + Limits + Businesses | ✅ Ho gaya | 100% |
 | **3** | Roles + Permissions + Branches + POS Counters + Employees | ✅ Ho gaya | 100% |
-| **4** | Products + Categories + Brands + Units + Inventory | ⬜ Baqi | 0% |
+| **4** | Products + Categories + Brands + Units + Inventory | 🔄 Chal raha hai | ~40% |
 | **5** | Customers + Suppliers (+ Ledgers) | ⬜ Baqi | 0% |
 | **6** | Purchases + Supplier Ledger | ⬜ Baqi | 0% |
 | **7** | POS + Sales + Payments + Customer Ledger | ⬜ Baqi | 0% |
@@ -52,13 +52,71 @@
 | **13** | Animations + UI Polish + Performance | ⬜ Baqi | 0% |
 | **14** | Security + Testing | 🔄 Chal raha hai | ~25% |
 | **15** | Deployment Preparation | ⬜ Baqi | 0% |
-| | **TOTAL PROGRESS** | 🟢 | **~31%** |
+| | **TOTAL PROGRESS** | 🟢 | **~34%** |
 
 ---
 
 ## 📝 Session Log (Kaam ki History)
 
 > Naya kaam upar add karo (newest first). Har entry mein: **date**, **kya hua**, **kya next hai**.
+
+### 2026-08-28 — Phase 4 (Session 1): Catalog mukammal 🔄 (~40% — Products + Categories + Brands + Units)
+
+Phase 4 ka **catalog hissa poora ban gaya**. Inventory (stock, movements, ledger, adjustments, transfers) **agli session** mein — neeche "BAQI" list mein saaf likha hai.
+
+**✅ JO HO GAYA:**
+
+**1) Database — 5 nayi migrations**
+- `categories` (self-referencing `parent_id` — subcategories #26), `brands`, `units`, `products`, `product_variants`. Sab pe `created_by`/`updated_by` + softDeletes.
+- **Paisa hamesha `decimal`, kabhi `float` nahi.** Cost mein **4 decimal places** (case price ko divide karo to unit cost paise ka bhi hissa ban jati hai), selling price mein 2 (jo customer se asal mein liya jata hai).
+- **Design faisla:** category ke liye do tables (categories + subcategories) nahi — **aik self-referencing table**. Aaj jo shop sab kuch "Drinks" mein rakhti hai wo kal "Drinks → Cold → Cans" chahegi; do-level schema ko us waqt migrate karna parta.
+- **`products` mein stock ka column NAHI hai.** Product ke paas "aik quantity" hoti hi nahi — uski quantity **har branch ki alag** hoti hai (#136), jo inventory tables mein aayegi. Yahan aik cached total rakhna doosri "sachai" bana deta jo waqt ke saath ghalat ho jati.
+- **`product_variants.options`** JSON hai (`{"Size":"L","Colour":"Red"}`) — attributes/values/pivot ki teen tables nahi. Aur naam **`options` hai, `attributes` nahi**: `$attributes` Eloquent ki apni internal property hai, us naam ka column bahar se theek parhta hai magar **class ke andar se raw attribute bag** de deta hai.
+
+**2) `ProductType` enum (#25)** — Standard / Service / Variable. `tracksStock()` aur `hasVariants()` isi enum pe hain, taake "service ka stock nahi hota" **aik hi jagah** likha ho aur har module ka jawab aik jaisa rahe.
+
+**3) `CatalogService` (#26, #158)**
+- Categories/brands/units ka CRUD; **quota** categories aur brands pe (#79), **units pe jaan boojh kar nahi** — apna maal theek se describe karne ki qeemat tenant se nahi leni chahiye.
+- Category ka parent: doosre tenant ka ho to 404-jaisa refuse, apna aap parent na ban sake, aur **apni hi subcategory ke neeche na ja sake** (warna tree ring ban jata hai aur har recursive read hang).
+- **Unit conversion ka dhaancha ready (#158):** base unit + `conversion_factor`. Stock hamesha **base unit** mein rehta hai — Dozen bechne pe 12 Piece kam hote hain. Derived unit `catalog.multi_unit` feature maangta hai; chain (Gross → Dozen → Piece) abhi refuse hoti hai.
+- Naya business ab **aik base unit "Piece" ke saath** shuru hota hai, taake pehla product add karne se pehle unit invent na karni pare (#195).
+
+**4) `ProductService` (#24, #25, #27)** — teen cheezein yahan isliye hain ke aur kahin mehfooz nahi rakhi ja saktin:
+- **Code allocation:** SKU aur barcode ka namespace **products + variants dono pe aik hi hai** — till pe scan kabhi ambiguous nahi hona chahiye — is liye dono tables ek hi jagah se allocate hote hain. (Test: product ka SKU variant ke SKU se takra nahi sakta.)
+- **Variant contract:** variable product ki qeemat variants pe, standard ki apne upar. Type badlo to variants **archive** hote hain, delete nahi (#198).
+- **Gates:** product quota, `catalog.variants` feature, aur "service kabhi stock track nahi karega — form kuch bhi kahe".
+- **Barcode auto-generate (#27):** EAN-13 **check digit ke saath**, prefix `2` (GS1 ka restricted-circulation range — yani jo codes dukaan apne liye khud banati hai). Asli manufacturer prefix use karna kisi asli product se takra sakta tha.
+
+**5) ⚠️ Cost price aik PERMISSION hai, sirf aik column nahi (#52)**
+- List aur form dono `products.view_cost` poochte hain.
+- **Aur sirf chupana kaafi nahi:** jo banda cost dekh nahi sakta, wo usay **overwrite bhi nahi kar sakta**. Form request cost ko drop kar deti hai aur service "key missing = jaisa hai waisa rehne do" samajhti hai — warna cashier product ka naam theek karte hue uski cost chup-chaap 0 kar deta. Iska apna test hai.
+
+**6) UI — 4 naye screens**
+- **Products**: search (name/SKU/barcode, **variant ke code se bhi**), category/brand/status filters, **pagination** (#97), type badges, price range (variable ke liye), margin (sirf jise ijazat ho), activate/deactivate, quota meter.
+- **Categories**: parent + nested children aik hi table mein; **in-use category ka delete button greyed** ("switch it off instead").
+- **Brands**, **Units** (base/derived, conversion factor, "whole numbers vs decimals").
+- Chaaron pe aik **catalog tab strip**, jo permission ke hisab se filter hoti hai.
+- Product form: type radio cards (Variable **plan mein na ho to disabled + "Not in your plan"**), Alpine se variant rows add/remove, SKU khali chhoro to generate ho jata hai.
+
+**7) ⚠️ Tests — 47 naye, sab PASS**
+- `Catalog/CatalogTest` (23), `Catalog/ProductTest` (24).
+- **Result: `php artisan test` → 269 tests / 886 assertions PASS**.
+- Aik purana test update karna para: Phase 2 ka `test_a_code_with_no_registered_counter_reports_zero_usage` `limits.products` ko "abhi ginti nahi hoti" ki misaal ke taur pe use karta tha — ab wo asal mein ginta hai, to misaal `limits.invoices_per_month` (Phase 7) pe move kar di. Test ka maqsad wahi hai, misaal badli hai.
+
+**8) Seeder + build + browser verification**
+- Seeder ab **demo catalogue** bhi banata hai (asli services ke through, insert se nahi): 3 categories, 1 brand, 4 products — standard × 2 (generated EAN-13 barcodes ke saath), **variable T-Shirt (3 variants)**, aur aik service.
+- `npm run build` — app.css 102.85 → **103.58 kB** (gzip 16.63).
+- ✅ Browser verified: Products list (Cola 45.50 → 70.00, **margin 35%**; T-Shirt ka **price range 1,200–1,250**; service 100%), naya product form (type switch karte hi "Codes & pricing" card **Variants card se replace** ho jata hai), Categories (nested + greyed delete), Units (Piece = base unit). Zero console errors, zero failed requests.
+
+**⬜ BAQI (Phase 4 complete karne ke liye — agli session):**
+- ⬜ **Inventory ka poora hissa (#28–#34, #136, #142, #185):** `stock` (per branch #136) + `stock_movements` ledger, `InventoryService` (`getAvailableStock()` / `createMovement()` #185), stock adjustment (+reason), branch-to-branch transfer (draft/sent/received), low-stock alerts, expiry/batch, aur **negative stock setting (default No, #142)**.
+- ⬜ **Barcode label printing** (custom size, name+price) — #27. Generate ho gaya, print layout baqi.
+- ⬜ **Product images upload** — #149. Column aur placeholder ready hain, upload UI baqi (secure upload rules #101 ke saath aayega).
+- ⬜ **Bulk import/export (CSV/Excel)** — #150, #151. `catalog.import` feature aur `products.import` permission dono maujood hain.
+- ⬜ **Opening stock** — #152 (inventory ke saath).
+
+➡️ **Next: Phase 4 Session 2** — Inventory engine (`InventoryService` + stock + movements), phir barcode printing aur import/export.
+
 
 ### 2026-08-28 — Phase 3 MUKAMMAL ✅ (Roles + Permissions + Branches + POS Counters + Employees)
 
@@ -455,15 +513,15 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 *(Spec ref: #24–34, #136, #142, #150–152, #157–158, #185)*
 
 ### Catalog
-- [ ] Categories / Subcategories / Brands / Units (unlimited) — #26
-- [ ] Product management (full form) — #24
-- [ ] Product types: Standard / Service / Variable — #25
-- [ ] Product variations (size/color, per-variation SKU/price/stock) — #25
-- [ ] Product images + placeholder — #149
-- [ ] Product status (Active/Inactive) — #105
+- [x] Categories / Subcategories / Brands / Units — #26 *(self-referencing categories; units bilkul unlimited — quota sirf categories/brands pe)*
+- [x] Product management (full form) — #24 *(`ProductService` + filters/search/pagination wali list; SKU khali chhoro to generate)*
+- [x] Product types: Standard / Service / Variable — #25 *(`ProductType` enum — `tracksStock()` yahin, service ka stock kabhi nahi)*
+- [x] Product variations (size/color, per-variation SKU/price) — #25 *(`product_variants` + `catalog.variants` feature gate; per-variation **stock** inventory ke saath aayega)*
+- [ ] Product images + placeholder — #149 *(⚙️ `image_path` column + UI placeholder ready; upload form secure-upload rules (#101) ke saath aayega)*
+- [x] Product status (Active/Inactive) — #105 *(inactive product bik nahi sakta magar poori history rakhta hai)*
 
 ### Barcode (plan-based)
-- [ ] Auto-generate + manual barcode — #27
+- [x] Auto-generate + manual barcode — #27 *(EAN-13 check digit ke saath, GS1 ka in-store prefix `2`; manual code diya to wahi, aur products+variants dono mein unique)*
 - [ ] Barcode label printing (custom size, name+price) — #27
 
 ### Inventory (`InventoryService` — #185)
@@ -482,7 +540,7 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 - [ ] Opening stock support — #152
 - [ ] Bulk import (CSV/Excel, plan feature) — #150
 - [ ] Bulk export (Excel/CSV) — #151
-- [ ] Unit conversion future-ready structure — #158
+- [x] Unit conversion future-ready structure — #158 *(base unit + `conversion_factor`; stock hamesha base unit mein, `toBase()`/`fromBase()` tested. Multi-unit **selling** POS ke saath)*
 
 ---
 
@@ -674,7 +732,7 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 - [x] Feature tests: Subscription Expiry — #116 *(`Subscription/SubscriptionExpiryTest` 26 + `Subscription/SubscriptionGateTest` 22 — trial/grace/expiry, lock vs read-only vs pos-off, stale status column dono taraf se)*
 - [x] ⚠️ Tenant leak test (Business A → Business B URL = 403/404) — #117 *(cross-tenant PK `find()` → null; dashboard HTTP test dono tenants pe; request input se tenant switch block)*
 
-> **Ab tak ka test status:** `php artisan test` → **222 tests / 772 assertions PASS** (MySQL `pos_saas_test`) — Auth 22 · PasswordReset 11 · TenantIsolation 20 · PlanLimit 29 · PlanFeature 21 · SubscriptionExpiry 26 · SubscriptionGate 22 · RolePermission 31 · BranchAccess 19 · Employee 20 · Unit 1. Har naye phase ke saath yahan tests barhte rahenge.
+> **Ab tak ka test status:** `php artisan test` → **269 tests / 886 assertions PASS** (MySQL `pos_saas_test`) — Auth 22 · PasswordReset 11 · TenantIsolation 20 · PlanLimit 29 · PlanFeature 21 · SubscriptionExpiry 26 · SubscriptionGate 22 · RolePermission 31 · BranchAccess 19 · Employee 20 · Catalog 23 · Product 24 · Unit 1. Har naye phase ke saath yahan tests barhte rahenge.
 
 ---
 

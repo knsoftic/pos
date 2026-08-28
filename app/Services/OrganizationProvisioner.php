@@ -23,6 +23,7 @@ class OrganizationProvisioner
         protected BranchService $branches,
         protected PosCounterService $counters,
         protected RoleService $roles,
+        protected CatalogService $catalog,
     ) {}
 
     public function provision(Business $business): void
@@ -31,6 +32,10 @@ class OrganizationProvisioner
 
         $this->counters->ensureDefaultCounter($business, $branch);
         $this->roles->seedSystemRoles($business);
+
+        // One base unit (Piece), so the first product can be added without
+        // stopping to invent a unit of measure first (#26, #195).
+        $this->catalog->seedDefaults($business);
 
         // Park the owner in the main branch. It changes nothing about what they
         // may see — an owner reaches every branch — but it gives their sales and

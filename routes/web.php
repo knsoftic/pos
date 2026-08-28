@@ -10,10 +10,14 @@ use App\Http\Controllers\Admin\PlanController;
 use App\Http\Controllers\Admin\SystemNotificationController;
 use App\Http\Controllers\App\BillingController;
 use App\Http\Controllers\App\BranchController;
+use App\Http\Controllers\App\BrandController;
+use App\Http\Controllers\App\CategoryController;
 use App\Http\Controllers\App\DashboardController as AppDashboardController;
 use App\Http\Controllers\App\EmployeeController;
 use App\Http\Controllers\App\PosCounterController;
+use App\Http\Controllers\App\ProductController;
 use App\Http\Controllers\App\RoleController;
+use App\Http\Controllers\App\UnitController;
 use App\Http\Controllers\Auth\AdminLoginController;
 use App\Http\Controllers\Auth\BusinessLoginController;
 use App\Http\Controllers\Auth\NewPasswordController;
@@ -117,6 +121,61 @@ Route::middleware('tenant.app')
             Route::get('roles/{role}/edit', [RoleController::class, 'edit'])->name('roles.edit');
             Route::put('roles/{role}', [RoleController::class, 'update'])->name('roles.update');
             Route::delete('roles/{role}', [RoleController::class, 'destroy'])->name('roles.destroy');
+        });
+
+        /*
+        |--------------------------------------------------------------------
+        | Catalogue — products and the lists they are filed under (Phase 4)
+        |--------------------------------------------------------------------
+        | Products split their gates by VERB (#188): seeing the catalogue,
+        | adding to it, editing it and archiving from it are four different
+        | authorities, and a shop floor role usually has only the first.
+        |
+        | Categories, brands and units share one `catalog.manage` gate — they
+        | are the same job, and splitting them would only make role setup
+        | tedious without making anything safer.
+        */
+
+        // ---- products (#24, #25, #105) --------------------------------------
+        Route::get('products', [ProductController::class, 'index'])
+            ->middleware('permission:products.view')->name('products.index');
+
+        Route::middleware('permission:products.create')->group(function () {
+            Route::get('products/create', [ProductController::class, 'create'])->name('products.create');
+            Route::post('products', [ProductController::class, 'store'])->name('products.store');
+        });
+
+        Route::middleware('permission:products.update')->group(function () {
+            Route::get('products/{product}/edit', [ProductController::class, 'edit'])->name('products.edit');
+            Route::put('products/{product}', [ProductController::class, 'update'])->name('products.update');
+            Route::post('products/{product}/toggle', [ProductController::class, 'toggle'])->name('products.toggle');
+        });
+
+        Route::delete('products/{product}', [ProductController::class, 'destroy'])
+            ->middleware('permission:products.delete')->name('products.destroy');
+
+        // ---- categories, brands, units (#26) --------------------------------
+        Route::middleware('permission:catalog.manage')->group(function () {
+            Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
+            Route::get('categories/create', [CategoryController::class, 'create'])->name('categories.create');
+            Route::post('categories', [CategoryController::class, 'store'])->name('categories.store');
+            Route::get('categories/{category}/edit', [CategoryController::class, 'edit'])->name('categories.edit');
+            Route::put('categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
+            Route::delete('categories/{category}', [CategoryController::class, 'destroy'])->name('categories.destroy');
+
+            Route::get('brands', [BrandController::class, 'index'])->name('brands.index');
+            Route::get('brands/create', [BrandController::class, 'create'])->name('brands.create');
+            Route::post('brands', [BrandController::class, 'store'])->name('brands.store');
+            Route::get('brands/{brand}/edit', [BrandController::class, 'edit'])->name('brands.edit');
+            Route::put('brands/{brand}', [BrandController::class, 'update'])->name('brands.update');
+            Route::delete('brands/{brand}', [BrandController::class, 'destroy'])->name('brands.destroy');
+
+            Route::get('units', [UnitController::class, 'index'])->name('units.index');
+            Route::get('units/create', [UnitController::class, 'create'])->name('units.create');
+            Route::post('units', [UnitController::class, 'store'])->name('units.store');
+            Route::get('units/{unit}/edit', [UnitController::class, 'edit'])->name('units.edit');
+            Route::put('units/{unit}', [UnitController::class, 'update'])->name('units.update');
+            Route::delete('units/{unit}', [UnitController::class, 'destroy'])->name('units.destroy');
         });
 
         // ---- employees (#50) -----------------------------------------------

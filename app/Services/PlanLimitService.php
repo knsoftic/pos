@@ -4,10 +4,13 @@ namespace App\Services;
 
 use App\Exceptions\LimitExceededException;
 use App\Models\Branch;
+use App\Models\Brand;
 use App\Models\Business;
 use App\Models\BusinessLimitOverride;
+use App\Models\Category;
 use App\Models\Limit;
 use App\Models\PosCounter;
+use App\Models\Product;
 use App\Models\User;
 use App\Support\LimitRegistry;
 use App\Support\TenantContext;
@@ -331,6 +334,23 @@ class PlanLimitService
                 ->allBranches()
                 ->forBusiness($businessId)
                 ->count(),
+        );
+
+        // Phase 4 — the catalogue. Archived rows do not occupy a slot, which is
+        // what `forBusiness()` already gives us (soft deletes are excluded).
+        $this->registerUsageResolver(
+            LimitRegistry::PRODUCTS,
+            fn (int $businessId): int => Product::query()->forBusiness($businessId)->count(),
+        );
+
+        $this->registerUsageResolver(
+            LimitRegistry::CATEGORIES,
+            fn (int $businessId): int => Category::query()->forBusiness($businessId)->count(),
+        );
+
+        $this->registerUsageResolver(
+            LimitRegistry::BRANDS,
+            fn (int $businessId): int => Brand::query()->forBusiness($businessId)->count(),
         );
     }
 

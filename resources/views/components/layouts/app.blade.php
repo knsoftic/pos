@@ -46,7 +46,7 @@
         ['label' => 'POS',          'icon' => 'pos',         'route' => null, 'feature' => FeatureRegistry::POS_TERMINAL, 'permission' => PermissionRegistry::POS_OPERATE],
         ['label' => 'Sales',        'icon' => 'sales',       'route' => null, 'feature' => FeatureRegistry::SALES_INVOICING, 'permission' => PermissionRegistry::SALES_VIEW],
         ['label' => 'Purchases',    'icon' => 'purchases',   'route' => null, 'feature' => FeatureRegistry::PURCHASES_ORDERS, 'permission' => PermissionRegistry::PURCHASES_VIEW],
-        ['label' => 'Products',     'icon' => 'products',    'route' => null, 'feature' => null, 'permission' => PermissionRegistry::PRODUCTS_VIEW],
+        ['label' => 'Products',     'icon' => 'products',    'route' => 'app.products.index',  'feature' => null, 'permission' => PermissionRegistry::PRODUCTS_VIEW],
         ['label' => 'Inventory',    'icon' => 'inventory',   'route' => null, 'feature' => FeatureRegistry::INVENTORY_STOCK_TRACKING, 'permission' => PermissionRegistry::INVENTORY_VIEW],
         ['label' => 'Customers',    'icon' => 'customers',   'route' => null, 'feature' => FeatureRegistry::CUSTOMERS_MANAGEMENT, 'permission' => PermissionRegistry::CUSTOMERS_VIEW],
         ['label' => 'Suppliers',    'icon' => 'suppliers',   'route' => null, 'feature' => FeatureRegistry::PURCHASES_SUPPLIER_LEDGER, 'permission' => PermissionRegistry::SUPPLIERS_VIEW],

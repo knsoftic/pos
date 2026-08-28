@@ -7,9 +7,13 @@ use App\Models\Admin;
 use App\Models\Business;
 use App\Models\Plan;
 use App\Models\Role;
+use App\Models\Unit;
 use App\Models\User;
+use App\Services\CatalogService;
 use App\Services\OrganizationProvisioner;
+use App\Services\ProductService;
 use App\Services\SubscriptionService;
+use App\Support\TenantContext;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -75,6 +79,10 @@ class DatabaseSeeder extends Seeder
         // real one (#47, #49, #51).
         $this->seedOrganization($store, $shop);
 
+        // A handful of real catalogue rows, so the product screens have
+        // something to show the moment you log in (#112).
+        $this->seedCatalog($store);
+
         $this->command?->info('Seeded accounts (password = "password"):');
         $this->command?->info('  Super admin  → superadmin@pos.test   (/admin/login)');
         $this->command?->info('  Business #1  → owner@demo.test        (/login)  [Professional, paid]');
@@ -107,6 +115,68 @@ class DatabaseSeeder extends Seeder
                 'branch_id' => $mainBranch?->id,
                 'max_discount_percent' => 10,
             ]);
+    }
+
+    /**
+     * A small demo catalogue for the first business — one of each product type,
+     * so every branch of the UI has something to render.
+     *
+     * Routed through the real services rather than inserting rows, so the seeded
+     * state is exactly what the app produces: generated SKUs, an in-store
+     * barcode, and variants with their own codes.
+     */
+    protected function seedCatalog(Business $store): void
+    {
+        app(TenantContext::class)->runFor($store, function (): void {
+            $catalog = app(CatalogService::class);
+            $products = app(ProductService::class);
+
+            $drinks = $catalog->createCategory(['name' => 'Drinks']);
+            $cold = $catalog->createCategory(['name' => 'Cold Drinks', 'parent_id' => $drinks->id]);
+            $clothing = $catalog->createCategory(['name' => 'Clothing']);
+            $brand = $catalog->createBrand(['name' => 'Acme Beverages']);
+
+            $piece = Unit::query()->where('short_name', 'pc')->first();
+
+            $products->create([
+                'name' => 'Cola 500ml',
+                'category_id' => $cold->id,
+                'brand_id' => $brand->id,
+                'unit_id' => $piece?->id,
+                'cost_price' => 45.50,
+                'selling_price' => 70,
+                'alert_quantity' => 24,
+                'generate_barcode' => true,
+            ]);
+
+            $products->create([
+                'name' => 'Mineral Water 1.5L',
+                'category_id' => $cold->id,
+                'brand_id' => $brand->id,
+                'unit_id' => $piece?->id,
+                'cost_price' => 55,
+                'selling_price' => 80,
+                'alert_quantity' => 12,
+                'generate_barcode' => true,
+            ]);
+
+            $products->create([
+                'name' => 'Cotton T-Shirt',
+                'type' => 'variable',
+                'category_id' => $clothing->id,
+                'unit_id' => $piece?->id,
+            ], [
+                ['options' => ['Size' => 'M', 'Colour' => 'Black'], 'cost_price' => 620, 'selling_price' => 1200, 'generate_barcode' => true],
+                ['options' => ['Size' => 'L', 'Colour' => 'Black'], 'cost_price' => 640, 'selling_price' => 1250, 'generate_barcode' => true],
+                ['options' => ['Size' => 'L', 'Colour' => 'White'], 'cost_price' => 640, 'selling_price' => 1250],
+            ]);
+
+            $products->create([
+                'name' => 'Home Delivery',
+                'type' => 'service',
+                'selling_price' => 250,
+            ]);
+        });
     }
 
     /**
