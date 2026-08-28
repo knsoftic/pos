@@ -15,7 +15,7 @@
 | **Working Dir** | `C:\xampp\htdocs\pos` |
 | **Environment** | Windows 11 + XAMPP (PHP + MySQL/MariaDB) |
 | **Start Date** | 2026-08-25 |
-| **Current Status** | ✅ **Phase 1 MUKAMMAL (100%)** — Multi-tenant architecture + dono auth panels + password reset + audit trail + dashboards (charts ke saath) mukammal. **50 tests / 146 assertions pass** (MySQL `pos_saas_test`) — tenant isolation (#116/#117) included. Build successful, browser verified, console/network zero errors. ➡️ **Next: Phase 2** (Plans + Subscriptions + Features + Limits). |
+| **Current Status** | ✅ **Phase 2 MUKAMMAL (100%)** — Plans + billing cycles + dynamic features + dynamic limits + subscriptions (trial/grace/expiry/upgrade-downgrade/payments) + per-business overrides + poora Super Admin business management (impersonation, notes, alerts) + tenant billing pages. **152 tests / 469 assertions pass** (MySQL `pos_saas_test`). Build + browser verified, console/network zero errors. Git repo init + first commit ho gaya. ➡️ **Next: Phase 3** (Roles + Permissions + Branches + POS Counters + Employees). |
 
 ---
 
@@ -37,7 +37,7 @@
 |-------|--------|--------|---|
 | **0** | Project Foundation & Setup | ✅ Ho gaya | 100% |
 | **1** | Auth + Super Admin + Tenant Architecture + DB Foundation | ✅ Ho gaya | 100% |
-| **2** | Plans + Subscriptions + Features + Limits + Businesses | 🔄 Chal raha hai | ~90% |
+| **2** | Plans + Subscriptions + Features + Limits + Businesses | ✅ Ho gaya | 100% |
 | **3** | Roles + Permissions + Branches + POS Counters + Employees | ⬜ Baqi | 0% |
 | **4** | Products + Categories + Brands + Units + Inventory | ⬜ Baqi | 0% |
 | **5** | Customers + Suppliers (+ Ledgers) | ⬜ Baqi | 0% |
@@ -49,15 +49,85 @@
 | **11** | Settings + Receipt + QR + Barcode | ⬜ Baqi | 0% |
 | **12** | Public Website + Pricing + Trial Registration | ⬜ Baqi | 0% |
 | **13** | Animations + UI Polish + Performance | ⬜ Baqi | 0% |
-| **14** | Security + Testing | 🔄 Chal raha hai | ~10% |
+| **14** | Security + Testing | 🔄 Chal raha hai | ~20% |
 | **15** | Deployment Preparation | ⬜ Baqi | 0% |
-| | **TOTAL PROGRESS** | 🟢 | **~19%** |
+| | **TOTAL PROGRESS** | 🟢 | **~25%** |
 
 ---
 
 ## 📝 Session Log (Kaam ki History)
 
 > Naya kaam upar add karo (newest first). Har entry mein: **date**, **kya hua**, **kya next hai**.
+
+### 2026-08-26/28 — Phase 2 MUKAMMAL ✅ (Plans + Subscriptions + Features + Limits + Business Management)
+
+Poora SaaS billing layer ban gaya: plan kya deta hai, tenant ne kitna use kiya, aur subscription khatam hone pe kya hota hai — **sab DB se aata hai, code mein kuch hardcode nahi (#190)**.
+
+**✅ JO HO GAYA:**
+
+**1) Database — 11 nayi migrations (sab `Ran`)**
+- `plans` (name/slug/description/badge/trial_days/grace_days/is_active/**is_public** = "Show on Website" #172/sort_order/softDeletes), `plan_prices` (har billing cycle ki alag row — #175), `features`, `limits`, `plan_feature` + `plan_limit` pivots, `subscriptions`, `subscription_payments`, `business_feature_overrides`, `business_limit_overrides`, `business_notes`.
+- **Design faisla:** "Free" (#173) aur "Lifetime" (#174) **flag nahi hain** — free = jiski prices 0 hain, lifetime = jiske paas `lifetime` price row hai. Jitne kam flags, utni kam states jo aapas mein jhagra karein.
+- **Subscriptions append-only history (#176, #198):** renew / upgrade / downgrade **nayi row** banati hai aur purani pe `superseded_at` lagta hai — purani billing kabhi rewrite nahi hoti. "Current" = wo row jiska `superseded_at` NULL hai.
+- Plan jo kisi subscription mein use ho raha ho wo **delete nahi hota, archive hota hai** (`restrictOnDelete` + softDeletes — #104), warna purane record ka plan resolve hi na ho.
+
+**2) Entitlement core — 3 services + 2 registries**
+- `Support/FeatureRegistry.php` — **57 feature codes** categories mein (accounting, branches, products, POS, customers, inventory, reports, team, integrations…), har ek ke label/description/default ke sath (#128).
+- `Support/LimitRegistry.php` — **12 quota codes**: products, categories, brands, customers, suppliers, employees, branches, pos_counters, warehouses, invoices_per_month, sms_per_month, storage_mb (#8, #129).
+- `Services/FeatureService.php` — resolution order **business override → plan pivot → registry default → off**; `enabled/disabled/allOf/anyOf/all/enabledCodes/authorize`; poora map cache hota hai (`subscription.cache_ttl`) aur plan/override badalte hi flush.
+- `Services/PlanLimitService.php` — `limit/isUnlimited/usage/remaining/canCreate/assertCanCreate/meter/meters`. **NULL = Unlimited** (#8). Usage ginne ke liye `registerUsageResolver()` — abhi sirf `employees` ka resolver hai; har agla phase apni table ka resolver khud register karega, taake ye class un tables ka naam na jane jo abhi wujood mein hi nahi.
+- `Services/SubscriptionService.php` (717 lines) — padhne wale: `current/history/isActive/isOnTrial/isInGrace/daysRemaining/plan/expiryBehavior/hasFeature/getLimit/usage/canCreate/meters` (#186); likhne wale: `startTrial` (#81), `assign`, `renew`, `changePlan` (upgrade/downgrade, bache hue din ka credit — data kabhi delete nahi hota #83), `cancel`, `resume`, `extend`, `addTrialDays`, `recordPayment` (#82), `reconcileStatuses`, `expiringWithin`. **Har write DB transaction mein** (#69, #98).
+
+**3) Access gates — middleware**
+- `CheckSubscription` — expiry behavior config se (`lock` / `read_only` / `pos_off` — #11), grace period (#127) ke andar tenant andar aata hai magar warning ke sath, aur **`billing` + `logout` hamesha khule** rehte hain warna tenant apna masla theek hi na kar sake.
+- `CheckFeature` — route-level deny (#80, #125): HTML pe redirect + flash, API pe **403 JSON**, aur galat feature code likho to **loudly fail** karta hai (chup-chaap allow nahi karta).
+- `bootstrap/app.php` mein **`tenant.app` group** = `auth:web` → `tenant` → `subscription`. Wajah: naya route add karte waqt paywall lagana **bhoolna mumkin hi na ho** (#187) — ye Phase 2 ka sab se important security faisla hai.
+- ⚠️ **Status column pe kabhi bharosa nahi:** access hamesha **dates se derive** hota hai (`Subscription::effectiveStatus`). Cron band bhi ho jaye to expired tenant sale nahi kar sakta, aur stale column ki wajah se paid tenant lock nahi hota. Dono cases ke tests likhe hain.
+
+**4) Super Admin — business management (#6, #126, #159, #177, #178, #179)**
+- **Businesses:** index (search + status/plan/subscription filters + stat cards), create/edit (business + owner user aik hi form mein), **show** = subscription card + actions + payments + **usage vs quota meters** (#126).
+- **Actions:** suspend / activate / **owner ka password reset** / **Sign in as owner (impersonate #178)** — impersonation banner ke sath, aur `stop-impersonating` route jaan boojh kar **tenant + subscription gates se bahar** hai taake operator kabhi phanse na.
+- **Subscription actions:** change plan / renew / extend expiry / add trial days / cancel / resume / record payment — sab `SubscriptionService` ko delegate (thin controllers #98).
+- **Overrides page** (#10): per-business feature on/off aur limit ka number; har change pe **reason + audit log** (#177) + caches flush.
+- **Plans:** CRUD + har cycle ki price + features/limits ke toggles + activate/deactivate, aur **comparison matrix** (#84) jisme "off" aur "unconfigured" alag alag dikhte hain.
+- **Internal notes** (#159) — sirf operator dekhta hai; pin/edit/delete.
+- **System alerts** (#179) — `SystemNotificationService`: expired/lapsing subscriptions, bina plan wale businesses, unconfirmed payments, failed jobs; topbar badge + alag page + manual reconcile button.
+
+**5) Tenant side (business panel)**
+- Sidebar **entitlement ke hisab se filter** hota hai (#13, #125) — jo feature plan mein nahi, uska link dikhta hi nahi (grey nahi, bilkul gayab). Dashboard aur Billing hamesha rehte hain.
+- Sidebar mein 2–3 sab se tight quota ke **meters**, billing page pe saare.
+- `app/billing` — current plan, price, renew date, plan mein kya shamil hai, **usage vs quota** (#78); `app/billing/plans` — cycle switcher (Monthly/Quarterly/Half-Yearly/Yearly) + poora feature comparison.
+- `<x-subscription-banner>` — trial / grace / expiring (config ke `warning_days` = **7,3,1** #11) / expired / cancelled — sab states aik component mein, sab se sanjeeda sach pehle.
+
+**6) Config + scheduler**
+- Naya `config/subscription.php`: currency, `trial_days`, `grace_days`, `expiry_behavior`, `warning_days`, `payment_methods`, `cache_ttl` — sab env-driven (#190).
+- `subscriptions:reconcile` command + **daily 00:10 schedule** (`withoutOverlapping()` + `onOneServer()`) — ye sirf stored status ko dates ke sath sync karta hai; access control iske bharose **nahi** hai.
+
+**7) ⚠️ Tests — 98 naye, sab PASS**
+- `Subscription/PlanLimitTest` (29), `Subscription/PlanFeatureTest` (21), `Subscription/SubscriptionExpiryTest` (26), `Subscription/SubscriptionGateTest` (22).
+- `TenantIsolationTest` 16 → **20** (subscriptions aur payments ki cross-tenant scoping bhi cover ho gayi).
+- **Result: `php artisan test` → 152 tests / 469 assertions PASS** (MySQL `pos_saas_test`).
+
+**8) Build + browser verification (28 Aug)**
+- ⚠️ **Build stale tha:** `public/build` 26 Aug ka tha jabke Phase 2 ki views 27 Aug ki — yani Tailwind ne nayi classes scan hi nahi ki thin. `npm run build` dobara chalaya: **app.css 68.41 kB → 101.99 kB** (gzip 16.42 kB). Sabaq: **views badlo to build dobara chalao**, warna UI toota dikhta hai.
+- ✅ Browser verified (`php artisan serve`): admin login → dashboard (growth chart render + lazy apexcharts chunk 200), **plans**, **plan comparison matrix**, **businesses index**, **business show** (subscription + meters + payments), **overrides**, **subscriptions**, **system alerts**; business login → dashboard (feature-filtered sidebar + meters), **billing**, **billing/plans**; aur **impersonation start → banner → stop → "Impersonation ended."** — sab sahi. Zero console errors, zero failed requests.
+
+**🐞 Verification ne jo pakra:**
+1. **Double-escaped page title** — `resources/views/app/billing/index.blade.php` mein `<x-layouts.app title="Billing &amp;amp; plan">` tha. Blade attribute ki value literal string rehti hai, phir `{{ $title }}` usay dobara escape karta hai → screen pe **"Billing &amp;amp; plan"** likha aa raha tha. Fix: component prop mein seedha `&` likho. (Plain HTML text mein `&amp;amp;` bilkul theek hai — wahan haath nahi lagaya.)
+2. **Stale build** (upar #8) — Phase 2 ki poori CSS missing thi.
+3. Do purane placeholder labels theek kiye: admin dashboard ka "Tenant management — Phase 2" ab **"All businesses →" ka asli link** hai, aur tenant dashboard ka banner "Phase 1 · Auth & tenancy live" → "Phase 2 · Plan & subscription live".
+
+**9) Git (Phase 0 ka pending item)**
+- ✅ `git init` + pehla commit — Phase 0–2 ka poora code. `.gitignore` pehle se sahi tha (`.env`, `vendor`, `node_modules`, `public/build` ignored).
+
+**⏭️ Deliberately deferred (wajah ke sath):**
+- **Limit usage resolvers** — abhi sirf `employees` ka hai, kyunke ginne ke liye baqi tables (products/customers/invoices) abhi bani hi nahi. Enforcement ka engine (`assertCanCreate` + `LimitExceededException`) tayyar aur tested hai; har module apna resolver apne phase mein register karega (#79).
+- **`CheckFeature` abhi kisi asli route pe laga nahi** — gate karne ke liye modules Phase 3/4 se aayenge. Middleware khud poori tarah tested hai.
+- **Public pricing page + self-serve trial signup** → Phase 12 (plan pe `is_public` flag ready hai).
+- **Online payment gateway** — abhi payments **manually record** hoti hain (operator entry). Gateway spec mein nahi hai; chahiye to alag se batayen.
+
+➡️ **Next: Phase 3** — Roles + Permissions (3-layer check: Subscription Feature + User Permission + Tenant #187) + Branches + POS Counters + Employees.
+
 
 ### 2026-08-25/26 — Phase 1 MUKAMMAL ✅ (Session 3 — 100%, tests pass)
 
@@ -199,7 +269,7 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 - [x] Font Awesome / Lucide icons integrate *(custom `<x-icon>` — inline Lucide-style SVG)*
 - [x] Laravel folder structure setup (`Services/`, `Support/`, `Enums/`, `Data/` — #182) *(`Policies/` Phase 3 mein banegi)*
 - [x] Base master layout (sidebar + topbar + content area)
-- [ ] Git repository init (recommended)
+- [x] Git repository init *(28 Aug 2026 — `git init` + pehla commit: Phase 0–2 ka poora code)*
 
 ---
 
@@ -247,48 +317,48 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 *(Spec ref: #6–11, #78–84, #125–129, #172–179, #186)*
 
 ### Subscription Plans
-- [ ] Dynamic plans CRUD (name, desc, prices per cycle, trial, badge, order) — #7
-- [ ] Billing cycles (Monthly/Quarterly/Half-Yearly/Yearly/Lifetime/Custom) — #175
-- [ ] Free plan (price 0) — #173
-- [ ] Lifetime plan — #174
-- [ ] "Show on Website" toggle per plan — #172
+- [x] Dynamic plans CRUD (name, desc, prices per cycle, trial, badge, order) — #7 *(`Admin\PlanController` + `PlanRequest`; sab kuch DB mein, koi deploy nahi chahiye)*
+- [x] Billing cycles (Monthly/Quarterly/Half-Yearly/Yearly/Lifetime/Custom) — #175 *(`BillingCycle` enum + `plan_prices` mein har cycle ki alag row)*
+- [x] Free plan (price 0) — #173 *(flag nahi — jiski prices 0 hain wo free hai)*
+- [x] Lifetime plan — #174 *(jiske paas `lifetime` price row ho; subscription ka `ends_at` NULL = kabhi expire nahi)*
+- [x] "Show on Website" toggle per plan — #172 *(`plans.is_public`; asli pricing website Phase 12)*
 
 ### Plan Limits (`PlanLimitService`, `LimitRegistry`)
-- [ ] Configurable limits (products, customers, employees, branches, POS, invoices, storage...) — #8, #129
-- [ ] Numeric vs Unlimited option — #8
-- [ ] **Backend limit enforcement** (501st product block, etc.) — #79
-- [ ] Plan usage meter display (350/500) — #78
+- [x] Configurable limits (products, customers, employees, branches, POS, invoices, storage...) — #8, #129 *(`LimitRegistry` mein 12 codes + `plan_limit` pivot)*
+- [x] Numeric vs Unlimited option — #8 *(NULL = unlimited, `isUnlimited()`)*
+- [x] **Backend limit enforcement** (501st product block, etc.) — #79 *(`canCreate()` / `assertCanCreate()` + `LimitExceededException`, poora tested. Usage resolver abhi sirf `employees` ka — baqi module apne phase mein `registerUsageResolver()` karega)*
+- [x] Plan usage meter display (350/500) — #78 *(`<x-meter>` — sidebar mein tightest 2–3, billing page pe saare, admin ke business show pe bhi)*
 
 ### Dynamic Features (`FeatureService`, `FeatureRegistry`)
-- [ ] Central feature registry (feature codes) — #128
-- [ ] Enable/disable features per plan (toggles) — #9
-- [ ] **Feature enforcement** (menu hide + button hide + backend route deny) — #80, #125
-- [ ] `CheckFeature` middleware — #130
+- [x] Central feature registry (feature codes) — #128 *(`FeatureRegistry` — 57 codes, categories + labels + defaults)*
+- [x] Enable/disable features per plan (toggles) — #9 *(`plan_feature` pivot + plan form ke toggles)*
+- [x] **Feature enforcement** (menu hide + button hide + backend route deny) — #80, #125 *(nav entitlement se filter hota hai; `FeatureService::authorize()` + `CheckFeature`. Asli module routes pe Phase 3/4 se lagega — abhi gate karne ko module hi nahi)*
+- [x] `CheckFeature` middleware — #130 *(alias `feature:`; HTML redirect, API 403, unknown code pe loudly fail)*
 
 ### Business-Level Overrides
-- [ ] Individual business feature override — #10
-- [ ] Individual business limit override — #10
-- [ ] Override change audit log — #177
+- [x] Individual business feature override — #10 *(`business_feature_overrides` + overrides page, dono taraf — on aur off)*
+- [x] Individual business limit override — #10 *(`business_limit_overrides`; "follow plan" pe wapas bhi ja sakte hain)*
+- [x] Override change audit log — #177 *(reason mandatory, `AuditService` se log, caches flush)*
 
 ### Subscriptions (`SubscriptionService`)
-- [ ] `isActive() / hasFeature() / getLimit() / canCreate() / usage() / daysRemaining()` — #186
-- [ ] Subscription expiry behavior (lock / read-only / POS-off) — #11
-- [ ] Expiry warnings (7/3/1 days) — #11
-- [ ] Grace period (configurable) — #127
-- [ ] `CheckSubscription` + `CheckBusinessStatus` middleware — #130
-- [ ] Trial system — #81
-- [ ] Subscription payment records — #82
-- [ ] Upgrade / downgrade (data safe on downgrade) — #83
-- [ ] Subscription history — #176
+- [x] `isActive() / hasFeature() / getLimit() / canCreate() / usage() / daysRemaining()` — #186 *(+ `current/history/isOnTrial/isInGrace/plan/meters`)*
+- [x] Subscription expiry behavior (lock / read-only / POS-off) — #11 *(`ExpiryBehavior` enum, `config/subscription.php` se; billing + logout hamesha khule)*
+- [x] Expiry warnings (7/3/1 days) — #11 *(`warning_days` config + `<x-subscription-banner>`)*
+- [x] Grace period (configurable) — #127 *(resolution: subscription → plan → config)*
+- [x] `CheckSubscription` + `CheckBusinessStatus` middleware — #130 *(business status ka check `SetBusinessTenant` mein fail-closed hai, is liye alag middleware ki zaroorat nahi rahi)*
+- [x] Trial system — #81 *(`startTrial()` + `addTrialDays()`; self-serve signup Phase 12)*
+- [x] Subscription payment records — #82 *(`subscription_payments`, `PaymentStatus` enum, append-only — galti edit se theek hoti hai, delete se nahi. Manual entry; gateway spec mein nahi)*
+- [x] Upgrade / downgrade (data safe on downgrade) — #83 *(`changePlan()` — bache hue din ka credit, nayi row, purana data kabhi delete nahi)*
+- [x] Subscription history — #176 *(append-only rows + `superseded_at`; "All subscriptions" view)*
 
 ### Super Admin — Business Management
-- [ ] Create/Edit/Delete business (full form) — #6
-- [ ] Suspend / Activate / Change plan / Extend / Add trial days — #6
-- [ ] Reset password / Login-as (impersonate) — #6, #178
-- [ ] Business usage details view — #126
-- [ ] Plan permission comparison matrix — #84
-- [ ] Private internal support notes — #159
-- [ ] System notifications (failed jobs, expiring, expired) — #179
+- [x] Create/Edit/Delete business (full form) — #6 *(business + owner user aik hi form mein; delete = archive #104)*
+- [x] Suspend / Activate / Change plan / Extend / Add trial days — #6 *(sab `SubscriptionService` ke through, har action audited)*
+- [x] Reset password / Login-as (impersonate) — #6, #178 *(impersonation banner + `stop-impersonating` route gates se bahar taake operator phanse na)*
+- [x] Business usage details view — #126 *(business show pe usage vs quota meters, live counted)*
+- [x] Plan permission comparison matrix — #84 *(`admin/plans/matrix` — "off" aur "unconfigured" alag dikhte hain)*
+- [x] Private internal support notes — #159 *(`business_notes` — pin/edit/delete, sirf operator ko dikhte hain)*
+- [x] System notifications (failed jobs, expiring, expired) — #179 *(`SystemNotificationService` + topbar badge + alerts page + manual reconcile)*
 
 ---
 
@@ -533,14 +603,14 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 ### Testing
 - [x] Feature tests: Tenant Isolation — #116, #117 *(`TenantIsolationTest` — 16 tests: scoped reads/aggregates, cross-tenant `find()` → null, creating-hook force, mass-assignment, escape hatches, HTTP isolation)*
 - [x] Feature tests: Login *(`Auth/AuthenticationTest` ~20 + `Auth/PasswordResetTest` 11 — dono guards + cross-guard denial + throttle + enumeration safety)* — #116 · ⬜ Permissions *(→ Phase 3 mein banenge)*
-- [ ] Feature tests: Plan Limits, Plan Features — #116
+- [x] Feature tests: Plan Limits, Plan Features — #116 *(`Subscription/PlanLimitTest` 29 + `Subscription/PlanFeatureTest` 21 — resolution order, unlimited, enforcement, cache invalidation, `CheckFeature` middleware)*
 - [ ] Feature tests: POS Sale, Stock Update — #116
 - [ ] Feature tests: Purchase, Returns — #116
 - [ ] Feature tests: Customer/Supplier Balance — #116
-- [ ] Feature tests: Subscription Expiry — #116
+- [x] Feature tests: Subscription Expiry — #116 *(`Subscription/SubscriptionExpiryTest` 26 + `Subscription/SubscriptionGateTest` 22 — trial/grace/expiry, lock vs read-only vs pos-off, stale status column dono taraf se)*
 - [x] ⚠️ Tenant leak test (Business A → Business B URL = 403/404) — #117 *(cross-tenant PK `find()` → null; dashboard HTTP test dono tenants pe; request input se tenant switch block)*
 
-> **Ab tak ka test status:** `php artisan test` → **50 tests / 146 assertions PASS** (MySQL `pos_saas_test`). Har naye phase ke saath yahan tests barhte rahenge.
+> **Ab tak ka test status:** `php artisan test` → **152 tests / 469 assertions PASS** (MySQL `pos_saas_test`) — Auth 22 · PasswordReset 11 · TenantIsolation 20 · PlanLimit 29 · PlanFeature 21 · SubscriptionExpiry 26 · SubscriptionGate 22 · Unit 1. Har naye phase ke saath yahan tests barhte rahenge.
 
 ---
 
