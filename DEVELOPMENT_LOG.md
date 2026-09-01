@@ -16,7 +16,7 @@
 | **Environment** | Windows 11 + XAMPP (PHP + MySQL/MariaDB) |
 | **Start Date** | 2026-08-25 |
 | **Demo logins** | [LOGIN_CREDENTIALS.md](LOGIN_CREDENTIALS.md) — seeded accounts (dev only, #191) |
-| **Current Status** | ✅ **Phase 8 MUKAMMAL (100%)** — Sale returns (#53, #140): per-line restock ya write-off, refund/credit settlement, profit sale-time cost pe reverse, returned sale void nahi ho sakti. **Phases 0–8 mukammal.** **529 tests / 1,713 assertions pass** (MySQL `pos_saas_test`). Build + browser verified: written-off return (stock nahi hila, account credit hua) aur restock return (shelf 85 → 87, 160 cash refund). ➡️ **Next: Phase 9** (Expenses + Profit & Loss). |
+| **Current Status** | ✅ **Phase 9 MUKAMMAL (100%)** — Expenses (#43), other income (#44), `ProfitService` + P&L statement (#45, #135, #183). **Phases 0–9 mukammal.** **570 tests / 1,880 assertions pass** (MySQL `pos_saas_test`). Build + browser verified: category banai, EXP-000001 (25,000 rent) + INC-000001 (1,800 scrap), aur poora P&L — revenue 1,190 → COGS 935.95 → gross 254.05 → net −22,945.95, day-by-day chart ke saath. ➡️ **Next: Phase 10** (Reports). |
 
 ---
 
@@ -45,20 +45,77 @@
 | **6** | Purchases + Supplier Ledger | ✅ Ho gaya | 100% |
 | **7** | POS + Sales + Payments + Customer Ledger | ✅ Ho gaya | 100% |
 | **8** | Returns + Stock Adjustments + Transfers | ✅ Ho gaya | 100% |
-| **9** | Expenses + Profit & Loss | ⬜ Baqi | 0% |
+| **9** | Expenses + Profit & Loss | ✅ Ho gaya | 100% |
 | **10** | Reports | ⬜ Baqi | 0% |
 | **11** | Settings + Receipt + QR + Barcode | ⬜ Baqi | 0% |
 | **12** | Public Website + Pricing + Trial Registration | ⬜ Baqi | 0% |
 | **13** | Animations + UI Polish + Performance | ⬜ Baqi | 0% |
 | **14** | Security + Testing | 🔄 Chal raha hai | ~25% |
 | **15** | Deployment Preparation | ⬜ Baqi | 0% |
-| | **TOTAL PROGRESS** | 🟢 | **~70%** |
+| | **TOTAL PROGRESS** | 🟢 | **~75%** |
 
 ---
 
 ## 📝 Session Log (Kaam ki History)
 
 > Naya kaam upar add karo (newest first). Har entry mein: **date**, **kya hua**, **kya next hai**.
+
+
+### 2026-09-01 — Phase 9 MUKAMMAL ✅ (expenses + other income + Profit & Loss)
+
+Ab system bata sakta hai ke dukaan **kama** kitna rahi hai, sirf bech kitna nahi rahi.
+
+**✅ JO HO GAYA:**
+
+**1) Sab se bara faisla: STOCK KHARCHA NAHI HAI (#43)**
+- Bikri ke liye khareeda gaya maal **purchase** hai — uski lagat profit tak **COGS** ke zariye pohanchti hai jis din maal **bikta** hai, us din nahi jis din delivery aayi.
+- Kiraya, tankhwah, bijli, marammat — ye **kharchay** hain: jis mahine ke hain usi mahine lagte hain aur inventory ko chhutay bhi nahi.
+- Agar stock ko yahan book kar diya jata to **wohi paisa do baar** ginta — aik dafa ab kharche mein, aik dafa bechne pe COGS mein — aur har us mahine P&L ghata dikhati jis mein dukaan ne maal bhara. `ExpenseService` kabhi `stocks` ya `stock_movements` ko haath nahi lagati, jaan boojh kar.
+
+**2) Categories dukaan ki apni hain (#43, #190)**
+- Na enum, na config list. Pharmacy "dispensary licence" likhti hai, restaurant "gas cylinders" — dono aik doosre ki list mein fit nahi hote, aur na hi kisi ko is ke liye deployment chahiye.
+- Phir bhi naya tenant **5 default headings** ke saath shuru hota hai (Rent, Utilities, Salaries, Transport, Repairs) — pehle expense form pe khali dropdown aik **dead end** hai.
+- Jis category ke neeche figures pare hain wo **archive** hoti hai, delete nahi (#104): pichli quarter ki P&L un rows ko parhti hai aur usay heading chahiye.
+
+**3) Cash daraz ko sach batati hai (#46)**
+- Khirki saaf karne wale ko till se paisa dena **waqai** daraz khali karta hai. Agar ye khuli session tak na pohanchta to har cash-up shortfall dikhata aur wo **aik** signal jo asal mein maayne rakhta hai — "kya till waqai kam hai?" — shor mein dab jata.
+- Cash expense `cash_out` barhata hai, cash income `cash_in` — dono `CashSessionService` ke zariye, taake likhne ka tareeqa aik hi jagah ho.
+- **Edit farq se chalta hai, nayi raqam se nahi:** 500 → 400 karne pe till **100 behtar** honi chahiye, 400 buri nahi. (Wahi soch jo stock take ki hai — difference post hota hai, count nahi.)
+- **Band session tareekh hai:** uska `difference` close pe stamp ho chuka; do din baad ki gayi edit usay **dobara nahi likhti**.
+
+**4) Profit ka matlab aik hi jagah tay hota hai (#45, #183)**
+```
+Revenue − COGS                        = GROSS PROFIT
+GROSS PROFIT − Expenses + Other income = NET PROFIT
+```
+- **Tax revenue nahi hai.** Sales tax kisi aur ki taraf se wasool hota hai aur baad mein jama karana hota hai. Usay aamdani ginna revenue aur margin dono ko tax rate ke barabar phula deta — aur margin wohi figure hai jis se malik qeemat lagata hai. Test: 1,100 counter pe liye, revenue **1,000**, margin 60% (66% nahi).
+- **Cost wohi jo BECHTE waqt thi (#52, #135).** ProfitService aaj ke shelf average se cost dobara **kabhi** nahi nikalti — warna pichle mahine ka margin har nayi delivery pe badal jata aur band mahina band rehna chhor deta.
+- **Sirf restock hone wala return COGS reverse karta hai.** Jo maal write-off hua wo shelf pe wapas aaya hi nahi: dukaan ne uski qeemat di aur ab wo uske paas nahi. Poora `cost_total` reverse karna business ko wo inventory credit kar deta jo uski hai hi nahi — aur tootne ka nuqsan hisaab se **ghayab** ho jata.
+- **Other income gross profit ke NEECHE.** Scrap, sublet, rebate — koi maal shelf se nahi gaya, to inhe revenue mein daalna gross profit phula kar margin barbaad kar deta. Test pin karta hai: income add karne se gross profit aur margin **bilkul nahi** hiltay, sirf bottom line hilti hai.
+- Sab kuch **aggregate queries** (#183) — saal bhar ki P&L paanch column jorne ke liye saal bhar ki sales memory mein nahi uthati.
+
+**🐞 Aik purana bug pakra gaya (Phase 8 se):**
+- `SaleReturn::profitReversed()` **poora** `cost_total` reverse kar raha tha. Poori tarah write-off hue return pe ye kehta tha "profit −78.71 reverse hui", jabke haqeeqat: dukaan ne 240 wapas diye aur badle mein **kuch nahi** mila — profit **−240** giri. Ab `restockedCost()` / `writtenOffCost()` alag hain aur return page dono dikhata hai. Browser proof: RET-000001 ab "Cost recovered 0.00 · Cost written off 161.29 · **Profit reversed −240.00**".
+
+**⚠️ Tests — 41 naye, sab PASS**
+- `Accounting/ExpenseTest` (24): reference numbering · branch hamesha · zero refuse · cash till se nikalta hai · bank transfer nahi · **edit farq se** · delete paisa wapas · **band session nahi badalta** · cash income andar · source lazmi · in-use category delete nahi · rename se expenses refile nahi hote · receipt store/replace/remove · **refused expense disk pe orphan nahi chhorta** · delete ke saath receipt bhi jata hai · form + future date + ghalat file type · duplicate category name · income form · view vs manage permission · feature gate · cross-tenant.
+- `Accounting/ProfitLossTest` (17): poora statement jorta hai · **tax revenue nahi** · held/voided revenue nahi · cost snapshot hai · restocked return dono reverse karta hai · **write-off sirf revenue reverse karta hai** · return **wapas aane ke din** lagta hai · expenses category-wise + share · **other income margin nahi phulata** · ghata aik number hai · **branch statements jama ho kar business bantay hain** · daily rows statement ke barabar · ulti date range · screen · permission · feature gate · cross-tenant.
+- **Result: `php artisan test` → 570 tests / 1,880 assertions PASS**
+
+**✅ Browser verification (asli flow)**
+- Categories screen: "Rent" aur "Utilities" banaye (in-use category pe lock icon, delete nahi).
+- Expense form: EXP-000001, 25,000 kiraya "Shop landlord" ko → list mein cards (Spent / Entries / Average a day) update.
+- Income form: INC-000001, 1,800 "Scrap cartons sold".
+- **P&L:** Revenue 1,590 − returns 400 = **1,190** · COGS 1,043.48 − 107.53 restocked = **935.95** (161.28 written off alag dikh raha) · **Gross 254.05 (21.4%)** · Expenses 25,000 · Other income +1,800 · **Net −22,945.95** — ghata saaf lafzon mein, chhupaya nahi gaya. Neeche costing method likha hua.
+- "Where the money went" bars + day-by-day chart (ApexCharts lazy chunk se).
+- Mobile 375px: horizontal scroll nahi.
+
+**🐞 Do UI bugs isi session mein theek:**
+- `<x-layouts.app title="Profit &amp; Loss">` — component attribute mein HTML entity **literal string** rehti hai aur `{{ }}` usay dobara escape karta hai, to tab pe "Profit &amp;amp; Loss" likha aa raha tha. Bare `&` chahiye. (Ye wahi gotcha hai jo Phase 2 mein billing page pe mila tha — dobara ho gaya.)
+- Chart ke x-axis labels aik doosre ke upar chhap rahe the (32 din, 8 ticks, rotate 0). Ab `rotate: -45` + `hideOverlappingLabels`.
+
+➡️ **Next: Phase 10** — Reports (#54–56, #134, #183).
+
 
 
 ### 2026-09-01 — Phase 8 MUKAMMAL ✅ (sale returns)
@@ -1096,12 +1153,12 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 ## PHASE 9 — Expenses + Profit & Loss
 *(Spec ref: #43–45, #135, #183)*
 
-- [ ] Expense categories (dynamic) — #43
-- [ ] Expense management (full form + attachment) — #43
-- [ ] Other income recording — #44
-- [ ] Profit & Loss (Revenue − COGS = Gross; − Expenses + Income = Net) — #45
-- [ ] Cost method: Weighted Average Cost — #135
-- [ ] `ProfitService` (consistent cost method) — #183
+- [x] Expense categories (dynamic) — #43 *(per-tenant, provisioning pe 5 default headings)*
+- [x] Expense management (full form + attachment) — #43 *(receipt photo/PDF, cash till se nikalta hai)*
+- [x] Other income recording — #44 *(gross profit line ke **neeche**, alag table)*
+- [x] Profit & Loss (Revenue − COGS = Gross; − Expenses + Income = Net) — #45
+- [x] Cost method: Weighted Average Cost — #135 *(statement khud apna method likhta hai)*
+- [x] `ProfitService` (consistent cost method) — #183 *(har profit figure ka **waahid** source)*
 
 ---
 

@@ -118,14 +118,40 @@ class SaleReturn extends Model
     }
 
     /**
-     * The profit this return took back, at the cost that applied when the goods
-     * were sold.
+     * The cost that came BACK into stock — restocked lines only.
+     *
+     * ⚠️ This, not `cost_total`, is what reverses out of cost of goods sold. A
+     * written-off line never returned to the shelf, so its cost stays spent:
+     * the shop paid for those goods and no longer has them. Treating the whole
+     * `cost_total` as recovered would credit the business with inventory it
+     * does not own.
+     */
+    public function restockedCost(): float
+    {
+        return round(
+            (float) $this->items->where('restock', true)->sum(fn ($item) => $item->costValue()),
+            4,
+        );
+    }
+
+    /** The cost of what came back damaged and was thrown away. */
+    public function writtenOffCost(): float
+    {
+        return round((float) $this->cost_total - $this->restockedCost(), 4);
+    }
+
+    /**
+     * The profit this return took back.
+     *
+     * Revenue reverses in full — the customer has their money. Cost reverses
+     * only for what went back on the shelf, so a fully written-off return costs
+     * the shop the whole sale value, which is exactly what happened.
      *
      * ⚠️ Needs `reports.view_profit` before it goes on a screen (#52).
      */
     public function profitReversed(): float
     {
-        return round((float) $this->subtotal - (float) $this->cost_total, 2);
+        return round((float) $this->subtotal - $this->restockedCost(), 2);
     }
 
     /** How the money went back, in words a receipt can print. */

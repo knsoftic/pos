@@ -17,11 +17,15 @@ use App\Http\Controllers\App\CustomerController;
 use App\Http\Controllers\App\CustomerLedgerController;
 use App\Http\Controllers\App\DashboardController as AppDashboardController;
 use App\Http\Controllers\App\EmployeeController;
+use App\Http\Controllers\App\ExpenseCategoryController;
+use App\Http\Controllers\App\ExpenseController;
 use App\Http\Controllers\App\InventoryController;
+use App\Http\Controllers\App\OtherIncomeController;
 use App\Http\Controllers\App\PosController;
 use App\Http\Controllers\App\PosCounterController;
 use App\Http\Controllers\App\ProductController;
 use App\Http\Controllers\App\ProductImportController;
+use App\Http\Controllers\App\ProfitLossController;
 use App\Http\Controllers\App\PurchaseController;
 use App\Http\Controllers\App\PurchaseReturnController;
 use App\Http\Controllers\App\RoleController;
@@ -435,6 +439,53 @@ Route::middleware('tenant.app')
                 Route::post('suppliers/{supplier}/adjustments', [SupplierController::class, 'adjustment'])->name('suppliers.adjustments');
             });
         });
+
+        // ---- expenses & other income (#43, #44) -----------------------------
+        Route::middleware('feature:accounting.expenses')->group(function () {
+            Route::get('expenses', [ExpenseController::class, 'index'])
+                ->middleware('permission:expenses.view')->name('expenses.index');
+
+            Route::middleware('permission:expenses.manage')->group(function () {
+                Route::get('expenses/create', [ExpenseController::class, 'create'])->name('expenses.create');
+                Route::post('expenses', [ExpenseController::class, 'store'])->name('expenses.store');
+                Route::get('expenses/{expense}/edit', [ExpenseController::class, 'edit'])->name('expenses.edit');
+                Route::put('expenses/{expense}', [ExpenseController::class, 'update'])->name('expenses.update');
+                Route::delete('expenses/{expense}', [ExpenseController::class, 'destroy'])->name('expenses.destroy');
+
+                /*
+                | Categories are the shop's own filing (#43, #190), so managing
+                | them rides on the same authority as recording an expense —
+                | somebody who may book the rent may also decide it is filed
+                | under "Rent" and not "Miscellaneous".
+                */
+                Route::get('expense-categories', [ExpenseCategoryController::class, 'index'])->name('expense-categories.index');
+                Route::post('expense-categories', [ExpenseCategoryController::class, 'store'])->name('expense-categories.store');
+                Route::put('expense-categories/{category}', [ExpenseCategoryController::class, 'update'])->name('expense-categories.update');
+                Route::delete('expense-categories/{category}', [ExpenseCategoryController::class, 'destroy'])->name('expense-categories.destroy');
+            });
+
+            Route::get('income', [OtherIncomeController::class, 'index'])
+                ->middleware('permission:expenses.view')->name('income.index');
+
+            Route::middleware('permission:expenses.manage')->group(function () {
+                Route::get('income/create', [OtherIncomeController::class, 'create'])->name('income.create');
+                Route::post('income', [OtherIncomeController::class, 'store'])->name('income.store');
+                Route::get('income/{income}/edit', [OtherIncomeController::class, 'edit'])->name('income.edit');
+                Route::put('income/{income}', [OtherIncomeController::class, 'update'])->name('income.update');
+                Route::delete('income/{income}', [OtherIncomeController::class, 'destroy'])->name('income.destroy');
+            });
+        });
+
+        /*
+        | ---- profit & loss (#45) --------------------------------------------
+        | Two gates, and they are not the same question. `accounting.profit_loss`
+        | asks whether the plan includes it; `reports.view_profit` asks whether
+        | this person may see what the shop earns. A cashier on the best plan in
+        | the catalogue still may not.
+        */
+        Route::get('reports/profit-loss', [ProfitLossController::class, 'index'])
+            ->middleware(['feature:accounting.profit_loss', 'permission:reports.view_profit'])
+            ->name('reports.profit-loss');
 
         // ---- employees (#50) -----------------------------------------------
         Route::get('employees', [EmployeeController::class, 'index'])

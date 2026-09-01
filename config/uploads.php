@@ -39,4 +39,23 @@ return [
         'max_dimension' => (int) env('UPLOAD_PRODUCT_IMAGE_MAX_PX', 3000),
     ],
 
+    /*
+    | Expense and other-income receipts (#43, #44).
+    |
+    | PDF is allowed here and nowhere else: a receipt is as likely to arrive as
+    | an emailed invoice as it is a phone photo, and refusing the commoner of
+    | the two would push people back to filing paper in a drawer. It is checked
+    | the same way everything else is — by content, not by the name it came
+    | with — and it is only ever served back as a download, never executed.
+    */
+    'receipts' => [
+        'disk' => env('UPLOAD_DISK', 'public'),
+
+        'path' => 'receipts',
+
+        'mimes' => ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+
+        'max_kb' => (int) env('UPLOAD_RECEIPT_MAX_KB', 4096),
+    ],
+
 ];

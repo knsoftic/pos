@@ -24,6 +24,7 @@ class OrganizationProvisioner
         protected PosCounterService $counters,
         protected RoleService $roles,
         protected CatalogService $catalog,
+        protected ExpenseService $expenses,
     ) {}
 
     public function provision(Business $business): void
@@ -36,6 +37,10 @@ class OrganizationProvisioner
         // One base unit (Piece), so the first product can be added without
         // stopping to invent a unit of measure first (#26, #195).
         $this->catalog->seedDefaults($business);
+
+        // A handful of expense headings, for the same reason: the first expense
+        // form should not open onto an empty dropdown (#43).
+        $this->expenses->seedDefaults($business);
 
         // Park the owner in the main branch. It changes nothing about what they
         // may see — an owner reaches every branch — but it gives their sales and

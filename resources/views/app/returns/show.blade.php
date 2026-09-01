@@ -153,9 +153,18 @@
                     <h3 class="font-semibold text-slate-900 dark:text-white">What it took back</h3>
                     <dl class="mt-3 space-y-2 text-sm">
                         <div class="flex justify-between">
-                            <dt class="text-slate-500 dark:text-slate-400">Cost of goods</dt>
-                            <dd class="tabular-nums text-slate-700 dark:text-slate-200">{{ number_format((float) $return->cost_total, 2) }}</dd>
+                            <dt class="text-slate-500 dark:text-slate-400">Cost recovered to the shelf</dt>
+                            <dd class="tabular-nums text-slate-700 dark:text-slate-200">{{ number_format($return->restockedCost(), 2) }}</dd>
                         </div>
+                        @if ($return->writtenOffCost() > 0)
+                            <div class="flex justify-between">
+                                <dt class="text-slate-500 dark:text-slate-400">
+                                    Cost written off
+                                    <span class="block text-xs text-slate-400">paid for, and gone</span>
+                                </dt>
+                                <dd class="tabular-nums text-amber-600 dark:text-amber-400">{{ number_format($return->writtenOffCost(), 2) }}</dd>
+                            </div>
+                        @endif
                         <div class="flex justify-between border-t border-slate-100 pt-2 dark:border-slate-800">
                             <dt class="font-semibold text-slate-900 dark:text-white">Profit reversed</dt>
                             <dd class="text-lg font-bold tabular-nums text-rose-600 dark:text-rose-400">
@@ -163,7 +172,8 @@
                             </dd>
                         </div>
                         <p class="text-xs text-slate-400">
-                            At the cost that applied when the goods sold, not today's.
+                            Revenue reverses in full; cost only for what went back on the shelf. Damaged goods were
+                            still paid for, so the shop is down the whole sale value on those.
                         </p>
                     </dl>
                 </div>
