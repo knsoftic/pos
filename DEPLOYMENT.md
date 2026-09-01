@@ -304,9 +304,16 @@ ls /www/wwwroot/pos.knbazaar.com/public/build/manifest.json
 Ye faisla aik zimmedari **apni machine par** daal deta hai: **jab bhi koi Blade
 view ya CSS badle**, wahan `npm run build` chala kar nateeja commit karna hoga.
 
+> ⚠️ **Ye command SERVER PAR NAHI chalani.** Server par Node hai hi nahi —
+> usi liye to assets repo mein rakhe hain. Ye aap ki **apni machine** par chalti
+> hai, project folder ke andar (`C:\xampp\htdocs\pos`). Server par chalane se
+> `npm error ENOENT ... /root/package.json` aata hai.
+
 ```bash
 npm run build && git add public/build && git commit -m "assets rebuild" && git push
 ```
+
+Phir server par sirf `git pull`.
 
 Bhool gaye to server par assets **mojood** honge magar **puraane** — aur ye
 ghayab assets se **bura** hai: ghayab hon to page saaf tor par toota dikhta hai
