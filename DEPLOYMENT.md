@@ -363,17 +363,25 @@ password shell history mein mehfooz ho jata hai aur, jab tak command chalti hai,
 aaPanel nginx aur PHP-FPM ko **`www`** user se chalata hai. Root se clone ki hui
 files us ke liye writable nahi hotin, aur Laravel ko do jagah likhna hota hai.
 
-```bash
-cd /www/wwwroot/pos.knbazaar.com
-chown -R www:www .
-chmod -R 755 .
-chmod -R 775 storage bootstrap/cache
-```
+⚠️ **Tarteeb ahem hai: pehle artisan, phir ownership.** `artisan` root se
+chalta hai aur `storage/logs/laravel.log` root ki milkiyat mein bana deta hai —
+ulta karein to `www` us mein likh nahi sakta aur site phir 500 dene lagti hai.
 
 ```bash
+cd /www/wwwroot/pos.knbazaar.com
 $PHP artisan storage:link
 $PHP artisan optimize
 ```
+
+```bash
+chown -R www:www .
+chmod -R 755 .
+chmod -R 775 storage bootstrap/cache
+chmod 640 .env
+```
+
+`.env` alag se 640 is liye ke us mein database ka password hai, aur `755` usay
+box ke har user ke liye readable chhor deta.
 
 `storage:link` ko `symlink` chahiye (step 3). Agar wo kamyabi ka paighaam de
 magar `public/storage` bane hi na, to wohi band function wajah hai — wapas
@@ -542,7 +550,8 @@ Server par `npm` ki zaroorat nahi — assets `git pull` ke saath aate hain (step
 | Bina styling ka page | `ls public/build` — khali ho to `git pull` adhoora chala. |
 | Naya kaam nazar nahi aa raha, purana layout | Assets stale hain. Apni machine par `npm run build`, commit, push, phir server par `git pull`. |
 | `/` ke ilawa har route par 404 | Step 5 — run directory aur rewrite rules. |
-| Har page par 500 | `storage/logs/laravel.log`. Aksar permissions (step 9) ya ghayab `APP_KEY`. |
+| Har page par 500, aur body **bilkul khali** | Hamara 500 page bhi nahi bana — matlab Blade compile nahi ho saka. `storage/` `www` ke liye writable nahi: **step 9**. |
+| Har page par 500, magar error page dikhta hai | `storage/logs/laravel.log` parhein. Aksar ghayab `APP_KEY` ya DB. |
 | 500 page par chhota sa code | Wo code `storage/logs/security.log` mein asli stack trace ke saath mojood hai. Usay grep karein. |
 | Images aur receipts 404 | `storage:link` chala hi nahi — `symlink` abhi band hai (step 3). |
 | Backup fail hota hai | `proc_open` band hai (step 3), ya `BACKUP_MYSQLDUMP` ghalat binary par hai. |
