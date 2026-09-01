@@ -293,6 +293,19 @@ class SaleService
     public function void(Sale $sale, string $reason): Sale
     {
         abort_unless($sale->status->canBeVoided(), 422, 'Only a completed sale can be voided.');
+
+        /*
+         | A partly returned sale must not be voided (#53). Voiding reverses the
+         | WHOLE sale, and a return has already reversed part of it — doing both
+         | would put the same goods back on the shelf twice and hand the money
+         | back twice. The shop returns the rest instead.
+         */
+        abort_if(
+            $sale->hasReturns(),
+            422,
+            'Goods have already come back against this sale. Return the rest rather than voiding it.',
+        );
+
         abort_if(blank($reason), 422, 'Say why the sale is being voided.');
 
         $sale->load(['items.product', 'payments', 'customer', 'cashSession']);

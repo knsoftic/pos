@@ -16,7 +16,7 @@
 | **Environment** | Windows 11 + XAMPP (PHP + MySQL/MariaDB) |
 | **Start Date** | 2026-08-25 |
 | **Demo logins** | [LOGIN_CREDENTIALS.md](LOGIN_CREDENTIALS.md) — seeded accounts (dev only, #191) |
-| **Current Status** | ✅ **Phase 7 MUKAMMAL (100%)** — Sale engine (#118 ke solah steps) + POS screen + sales book + receipts (58mm/80mm/A4) + reprint ginti. **Phases 0–7 mukammal.** **502 tests / 1,607 assertions pass** (MySQL `pos_saas_test`). Build + browser verified: till se asli sale, split payment receipt, credit sale, reprint marker. ➡️ **Next: Phase 8** (Returns + Stock Adjustments + Transfers — asal kaam **sale returns** hai). |
+| **Current Status** | ✅ **Phase 8 MUKAMMAL (100%)** — Sale returns (#53, #140): per-line restock ya write-off, refund/credit settlement, profit sale-time cost pe reverse, returned sale void nahi ho sakti. **Phases 0–8 mukammal.** **529 tests / 1,713 assertions pass** (MySQL `pos_saas_test`). Build + browser verified: written-off return (stock nahi hila, account credit hua) aur restock return (shelf 85 → 87, 160 cash refund). ➡️ **Next: Phase 9** (Expenses + Profit & Loss). |
 
 ---
 
@@ -44,7 +44,7 @@
 | **5** | Customers + Suppliers (+ Ledgers) | ✅ Ho gaya | 100% |
 | **6** | Purchases + Supplier Ledger | ✅ Ho gaya | 100% |
 | **7** | POS + Sales + Payments + Customer Ledger | ✅ Ho gaya | 100% |
-| **8** | Returns + Stock Adjustments + Transfers | ⬜ Baqi | 0% |
+| **8** | Returns + Stock Adjustments + Transfers | ✅ Ho gaya | 100% |
 | **9** | Expenses + Profit & Loss | ⬜ Baqi | 0% |
 | **10** | Reports | ⬜ Baqi | 0% |
 | **11** | Settings + Receipt + QR + Barcode | ⬜ Baqi | 0% |
@@ -52,13 +52,68 @@
 | **13** | Animations + UI Polish + Performance | ⬜ Baqi | 0% |
 | **14** | Security + Testing | 🔄 Chal raha hai | ~25% |
 | **15** | Deployment Preparation | ⬜ Baqi | 0% |
-| | **TOTAL PROGRESS** | 🟢 | **~65%** |
+| | **TOTAL PROGRESS** | 🟢 | **~70%** |
 
 ---
 
 ## 📝 Session Log (Kaam ki History)
 
 > Naya kaam upar add karo (newest first). Har entry mein: **date**, **kya hua**, **kya next hai**.
+
+
+### 2026-09-01 — Phase 8 MUKAMMAL ✅ (sale returns)
+
+Maal wapas aane wala poora rasta. Stock adjustments (#31) aur transfers (#32) Phase 4 mein ban chuke the, to is phase ka asal kaam **sale returns** tha.
+
+**✅ JO HO GAYA:**
+
+**1) Sab se bara faisla: `restock` PER LINE hai (#53)**
+- Jo customer band dabba wapas laata hai aur jo tuta hua — **dono ka paisa banta hai**, magar shelf pe sirf aik wapas jata hai.
+- Agar sab kuch default pe restock hota, to har tuti hui cheez chup-chaap stock **barha** deti, aur dukaandar ko pata agli ginti pe chalta — us waqt tak wajah dhoondna namumkin.
+- Isi liye har line pe **“Fit to sell”** checkbox aur uske neeche **condition note** (“What is wrong with it?”). Write-off wali line pe `sale_return` movement post hi **nahi** hoti.
+- Browser proof: RET-000001 (3 units, “Seals broken”) → stock **bilkul nahi hila**, 240 account pe credit. RET-000002 (2 units, fit to sell) → shelf **85 → 87**, 160 cash refund.
+
+**2) Return sale ko kabhi dobara nahi likhta**
+- Return apna **alag document** hai (`sale_returns` + `sale_return_items`), sale ka edit nahi. Sale ka total wahi rehta hai jo us din liya gaya tha — kyunke us din wahi liya gaya tha.
+- Limit **likhne se pehle** check hoti hai: `returnableQuantity()` = becha gaya − pehle se wapas aaya. Aik line bhi zyada ho to **poora return ruk jata hai** (aadha apply nahi hota) — test isay pin karta hai.
+
+**3) Return aur void aik saath nahi ho sakte**
+- `Sale::canBeVoided()` ab `hasReturns()` bhi dekhta hai. Dono karne se maal **do baar** shelf pe jata aur paisa **do baar** wapas.
+- Sale screen pe: return hone ke baad **Void button gayab**, “Return goods” tab tak rehta hai jab tak kuch returnable bacha ho.
+
+**4) Paisa kahan jaye — default wo jo kam se kam hairat wala ho**
+- **Walk-in** ka koi account nahi, to poora **haath mein** wapas. **Account customer** ka **credit** default — jo pehle se udhaar de raha ho usay cash pakrana masla hai, ledger se kaatna dono ke haq mein.
+- Sirf aik figure diya to **baqi doosri taraf** chala jata hai (customer kabhi kam nahi rehta). Dono diye to **jama** total ke barabar hona chahiye, warna 422.
+- **Walk-in ko credit nahi kiya ja sakta** — ye wahi na-mumkin combination hai jise service mana karti hai (guess nahi karti).
+- **Cash refund** khuli session ka `cash_refunds` barhata hai (#46) — daraz halki hui hai, cash-up ko pata hona chahiye. Card refund daraz ko **nahi** chhuta.
+
+**5) Profit us cost pe reverse hoti hai jo BECHTE waqt thi (#52)**
+- `unit_cost` sale ke apne snapshot se aata hai, aaj ke shelf average se nahi. Test: 40 pe becha → baad mein 90 wali delivery aayi → return phir bhi **80** cost reverse karta hai, 180 nahi.
+- `cost_total` return pe stamp hota hai; `profitReversed()` sirf `reports.view_profit` ke peeche dikhta hai.
+
+**6) Refund apni alag permission hai (#140)**
+- `sales.return` — bechna aur **paisa wapas dena** aik ikhtiyar nahi. Bohat si dukaanon mein har koi bech sakta hai magar refund sirf supervisor.
+- Permission na ho to **wahin refuse** (redirect back), billing pe **nahi** bheja jata — ye plan ka masla nahi, manager ka faisla hai. Plan mein feature na ho to **billing** pe bheja jata hai. Dono raste alag hain, aur test dono ko pin karta hai.
+
+**🐞 Do bugs jo is session mein pakre gaye:**
+- `SaleReturnItem::net()` tax **dobara** laga raha tha — return ka `unit_price` pehle hi all-in hai (discount phaila hua, tax andar). Theek kiya; rate ab sirf record ke liye stored hai.
+- Test likhte waqt: doosri business `TenantContext` khuli hui banai to `BelongsToTenant` ne uske owner pe **pehli** business ki stamp laga di — cross-tenant test ghalat wajah se pass ho raha tha. `TenantContext::forget()` pehle, phir doosri dukaan. (Ye product bug nahi, tenant stamp ka **maqsad** hi yehi hai.)
+
+**⚠️ Tests — 27 naye, sab PASS**
+- `Sales/SaleReturnTest` (27): goods shelf pe wapas + paisa wapas · sale kabhi dobara nahi likhi jati · becha hua se zyada wapas nahi · returns line pe **jama** hote hain · aik line ghalat ho to poora return ruke · damaged **refund hota hai magar restock nahi** · aik return mein kuch lines restock kuch write-off · walk-in refund vs account credit · walk-in ko credit nahi · refund+credit jama hona chahiye · aik figure diya to baqi doosri taraf · discounted line ka **discounted** hissa wapas · cash refund daraz se · card refund daraz ko nahi chhuta · profit **sale-time cost** pe reverse · returned sale void nahi hoti · sirf completed sale pe return · reason lazmi · form se post + show page · unticked line write-off · returns book ke totals · invoice se search · **permission** · **feature gate** · cross-tenant 404 · customer statement.
+- **Result: `php artisan test` → 529 tests / 1,713 assertions PASS**
+
+**✅ Browser verification (asli flow)**
+- Sale screen → **“Return goods”** → form: live total, “Already back” column, untick pe condition note.
+- RET-000001: 3 units write-off → *“240.00 credited to the account”*, show page pe **Written off** badge + note, profit reversed **−78.71**.
+- RET-000002: 2 units restock + 160 cash refund → ledger mein `sale_return | +2 | bal=87`.
+- Returns book: 4 cards (Returns / Value returned / Handed back / Credited) + **“3 written off”** badge. Sidebar mein **Returns** link (feature + permission dono ke peeche).
+- Mobile 375px: body pe horizontal scroll **nahi** — table apne container mein scroll karta hai.
+
+**✅ #31 aur #32 verify hue (Phase 4 ka kaam):** `InventoryService::adjust()` reason + audit log ke saath, aur transfers ka `send → receive(counted)` shortfall ke saath. Dono checkboxes ab tick.
+
+➡️ **Next: Phase 9** — Expenses + Profit & Loss (#43–45, #135, #183).
+
 
 ### 2026-08-28 — Audit + KN Softic branding + stock transfers 🔄 (Phase 4 ~90%)
 
@@ -1030,11 +1085,11 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 ## PHASE 8 — Returns + Stock Adjustments + Transfers
 *(Spec ref: #53, #29, #31, #32, #140)*
 
-- [ ] Sales return (full/partial, qty ≤ sold) — #53
-- [ ] Return effects (stock↑ + customer balance + payment adj + reports + profit) — #53
-- [ ] Returns permission gate — #140
-- [ ] Stock adjustment finalize + audit — #31
-- [ ] Stock transfer finalize (receive confirm) — #32
+- [x] Sales return (full/partial, qty ≤ sold) — #53
+- [x] Return effects (stock↑ + customer balance + payment adj + reports + profit) — #53
+- [x] Returns permission gate — #140
+- [x] Stock adjustment finalize + audit — #31 *(Phase 4 mein bana — `InventoryService::adjust()` + audit log)*
+- [x] Stock transfer finalize (receive confirm) — #32 *(Phase 4 mein bana — send → receive-with-count)*
 
 ---
 

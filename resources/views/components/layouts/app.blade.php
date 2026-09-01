@@ -45,6 +45,7 @@
         ['label' => 'Dashboard',    'icon' => 'dashboard',   'route' => 'app.dashboard',       'feature' => null, 'permission' => null],
         ['label' => 'POS',          'icon' => 'pos',         'route' => 'app.pos.index', 'feature' => FeatureRegistry::POS_TERMINAL, 'permission' => PermissionRegistry::POS_OPERATE],
         ['label' => 'Sales',        'icon' => 'sales',       'route' => 'app.sales.index', 'feature' => FeatureRegistry::SALES_INVOICING, 'permission' => PermissionRegistry::SALES_VIEW],
+        ['label' => 'Returns',      'icon' => 'refresh',     'route' => 'app.returns.index', 'feature' => FeatureRegistry::SALES_RETURNS, 'permission' => PermissionRegistry::SALES_RETURN],
         ['label' => 'Purchases',    'icon' => 'purchases',   'route' => 'app.purchases.index', 'feature' => FeatureRegistry::PURCHASES_ORDERS, 'permission' => PermissionRegistry::PURCHASES_VIEW],
         ['label' => 'Products',     'icon' => 'products',    'route' => 'app.products.index',  'feature' => null, 'permission' => PermissionRegistry::PRODUCTS_VIEW],
         ['label' => 'Inventory',    'icon' => 'inventory',   'route' => 'app.inventory.index', 'feature' => FeatureRegistry::INVENTORY_STOCK_TRACKING, 'permission' => PermissionRegistry::INVENTORY_VIEW],

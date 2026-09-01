@@ -89,6 +89,11 @@ class Sale extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    public function returns(): HasMany
+    {
+        return $this->hasMany(SaleReturn::class);
+    }
+
     /** The stock this sale took off the shelf. */
     public function stockMovements(): HasMany
     {
@@ -223,5 +228,39 @@ class Sale extends Model
     public function totalQuantity(): float
     {
         return round((float) $this->items->sum('quantity'), 4);
+    }
+
+    // ------------------------------------------------------------- returns
+
+    /** What has already come back against this sale (#53). */
+    public function returnedValue(): float
+    {
+        return round((float) $this->returns()->sum('total'), 2);
+    }
+
+    public function hasReturns(): bool
+    {
+        return $this->returns()->exists();
+    }
+
+    /** Is there anything left that could still come back? */
+    public function isFullyReturned(): bool
+    {
+        $this->loadMissing('items.returnItems');
+
+        return $this->items->isNotEmpty()
+            && $this->items->every(fn (SaleItem $item) => $item->returnableQuantity() <= 0);
+    }
+
+    /**
+     * A partly returned sale must not be voided.
+     *
+     * Voiding reverses the WHOLE sale, and a return has already reversed part of
+     * it — doing both would put the same goods back on the shelf twice and hand
+     * the money back twice. The shop returns the rest instead.
+     */
+    public function canBeVoided(): bool
+    {
+        return $this->status->canBeVoided() && ! $this->hasReturns();
     }
 }

@@ -26,6 +26,7 @@ use App\Http\Controllers\App\PurchaseController;
 use App\Http\Controllers\App\PurchaseReturnController;
 use App\Http\Controllers\App\RoleController;
 use App\Http\Controllers\App\SaleController;
+use App\Http\Controllers\App\SaleReturnController;
 use App\Http\Controllers\App\StockTransferController;
 use App\Http\Controllers\App\SupplierController;
 use App\Http\Controllers\App\UnitController;
@@ -286,6 +287,19 @@ Route::middleware('tenant.app')
 
             Route::post('sales/{sale}/void', [SaleController::class, 'void'])
                 ->middleware('permission:sales.void')->name('sales.void');
+
+            /*
+            | Returns (#53) carry their own feature AND their own permission
+            | (#140): handing money back out of the till is not the same
+            | authority as taking it in, and plenty of shops let anyone sell
+            | while only a supervisor may refund.
+            */
+            Route::middleware(['feature:sales.returns', 'permission:sales.return'])->group(function () {
+                Route::get('returns', [SaleReturnController::class, 'index'])->name('returns.index');
+                Route::get('sales/{sale}/returns/create', [SaleReturnController::class, 'create'])->name('returns.create');
+                Route::post('sales/{sale}/returns', [SaleReturnController::class, 'store'])->name('returns.store');
+                Route::get('returns/{saleReturn}', [SaleReturnController::class, 'show'])->name('returns.show');
+            });
         });
 
         /*

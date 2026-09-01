@@ -12,7 +12,19 @@
                 <x-icon name="printer" class="h-4 w-4" /> Receipt
             </a>
 
-            @if ($sale->status->canBeVoided())
+            @if ($sale->status === \App\Enums\SaleStatus::Completed && Route::has('app.returns.create'))
+                @can(\App\Support\PermissionRegistry::SALES_RETURN)
+                    @unless ($sale->isFullyReturned())
+                        <a href="{{ route('app.returns.create', $sale) }}" class="btn btn-secondary">
+                            <x-icon name="refresh" class="h-4 w-4" /> Return goods
+                        </a>
+                    @endunless
+                @endcan
+            @endif
+
+            {{-- A partly returned sale cannot be voided: doing both would put the
+                 goods back twice and hand the money back twice (#53). --}}
+            @if ($sale->canBeVoided())
                 @can(\App\Support\PermissionRegistry::SALES_VOID)
                     <div x-data="{ asking: false }" class="relative">
                         <button type="button" class="btn btn-ghost text-rose-600 dark:text-rose-400" @click="asking = ! asking">

@@ -6,6 +6,7 @@ use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * One line on a sale (#14).
@@ -49,6 +50,11 @@ class SaleItem extends Model
         return $this->belongsTo(ProductVariant::class, 'product_variant_id');
     }
 
+    public function returnItems(): HasMany
+    {
+        return $this->hasMany(SaleReturnItem::class);
+    }
+
     // ----------------------------------------------------------------- money
 
     /** Quantity × price, before this line's discount and tax. */
@@ -90,5 +96,33 @@ class SaleItem extends Model
         $gross = $this->gross();
 
         return $gross <= 0 ? 0.0 : round(((float) $this->discount_amount / $gross) * 100, 2);
+    }
+
+    // --------------------------------------------------------------- returns
+
+    /** How much of this line has already come back (#53). */
+    public function returnedQuantity(): float
+    {
+        return round((float) $this->returnItems()->sum('quantity'), 4);
+    }
+
+    /** The most that could still come back: sold, less already returned. */
+    public function returnableQuantity(): float
+    {
+        return round(max(0, (float) $this->quantity - $this->returnedQuantity()), 4);
+    }
+
+    /**
+     * What one unit of this line is worth to the customer, all in.
+     *
+     * The line discount is spread across the quantity sold, so returning half of
+     * a discounted line gives back half of the discounted price — not the full
+     * one, which would hand back more money than was taken.
+     */
+    public function effectiveUnitPrice(): float
+    {
+        $quantity = (float) $this->quantity;
+
+        return $quantity <= 0 ? 0.0 : round($this->net() / $quantity, 4);
     }
 }
