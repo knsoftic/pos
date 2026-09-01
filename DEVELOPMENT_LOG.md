@@ -15,8 +15,8 @@
 | **Working Dir** | `C:\xampp\htdocs\pos` |
 | **Environment** | Windows 11 + XAMPP (PHP + MySQL/MariaDB) |
 | **Start Date** | 2026-08-25 |
-| **Demo logins** | [LOGIN_CREDENTIALS.md](LOGIN_CREDENTIALS.md) — seeded accounts (dev only, #191) |
-| **Current Status** | ✅ **Phase 14 MUKAMMAL** — Session 1 (deewarein): **global** security headers (#100), 403/404/419/429/500/503 error pages jo kuch leak nahi karte aur reference dete hain (#93), `security` + `financial` log channels (#94), `POST /register` samet throttles (#65). Session 2 (hamle + immutability): `ProtectsFinancialRecords` + `ProtectedBuilder` — financial record delete nahi hota, qaida **status** pe hai (#133/#198); CSRF/XSS/SQLi/mass-assignment/upload ka apna proof (#100); aur aik asli slug-overflow bug jo flakiness ban kar chhupa hua tha. **Phases 0–14 mukammal** (sirf onboarding wizard #86 baqi). **735 tests / 2,876 assertions pass** (teen lagatar clean run). ➡️ **Next: Phase 15** — Deployment Preparation. |
+| **Demo logins** | Printed by `DemoSeeder` when it runs — password `password`, dev only (#191). The file that used to list them was removed before the repo went public: default credentials written down in one place are default credentials somebody finds. |
+| **Current Status** | ✅ **PHASES 0–15 MUKAMMAL — project production-ready.** Phase 15 session 1: seeder split (production seed **koi account nahi banata**), `pos:make-admin`, `pos:preflight`, scheduler heartbeat, do drift-proof env files (#112/#114/#115/#191). Session 2: `pos:backup` — **restore kar ke verify kiya**, restored copy pe `check-integrity` clean (#95); browser floor declare kiya + `<x-browser-notice>` (#180); README poora rewrite (#192); `LOGIN_CREDENTIALS.md` repo se hataya. **757 tests / 2,937 assertions pass**. ⬜ Baqi sirf: **onboarding wizard (#86)**. |
 
 ---
 
@@ -59,6 +59,85 @@
 ## 📝 Session Log (Kaam ki History)
 
 > Naya kaam upar add karo (newest first). Har entry mein: **date**, **kya hua**, **kya next hai**.
+
+
+### 2026-09-01 — Phase 15 MUKAMMAL ✅ (deployment preparation)
+
+Do session. Pehla **bura deploy mushkil banana**, doosra **bure deploy se bachna**.
+
+---
+
+#### Session 1 — bura deploy mushkil banana (#112, #114, #115, #191)
+
+**1) Seeder ka split — sab se bara finding**
+- `php artisan migrate --seed` deploy ke baad likhi jane wali sab se qudrati command hai. Ye **production server pe `superadmin@pos.test` banati thi jiska password lafz "password" tha**, internet-facing box pe, aur kuch batati bhi nahi thi. Wahid warning file mein aik comment tha — **aur comment control nahi hota.**
+- `DatabaseSeeder` ab sirf wo lagata hai jo asli installation ko chahiye: feature/limit registries (ye wo **vocabulary** hai jise code check karta hai — inke bagair database khali nahi, **toota** hota hai) aur starting plan catalogue.
+- `DemoSeeder` baqi sab rakhta hai aur production mein **chalne se inkar** karta hai. `ALLOW_DEMO_SEED` staging ke liye hai jo imaandari se khud ko production kehta hai — warna wahan demo lene ka tareeqa environment ke baare mein **jhoot bolna** ban jata, aur phir wo guard har jagah band ho jata.
+
+**2) `pos:make-admin` — kyunke tala theek karne ke baad chabi bhi deni thi**
+- Demo admin production path se nikalne ke baad asli install ke paas **koi operator hi nahi bachta tha, aur banane ka koi tareeqa nahi.**
+- `--password=` option jaan boojh kar **nahi** hai: command line pe password shell history mein likha jata hai, chalte waqt `ps` mein har user ko dikhta hai, aur deployment notes mein paste ho jata hai. `secret()` se parha jata hai aur wohi policy lagti hai jo login screen pe hai — operator account wo hai jise **sab se kam** kamzor password ki ijazat honi chahiye, aur CLI shortcut usay sab se zyada ka imkaan bana deta.
+
+**3) `pos:preflight`**
+- Checklist ye nahi bata sakti ke **aap ka** box kis haal mein hai. "Debug band rakhna" mashwara hai; "APP_DEBUG on hai aur ye production hai" us machine ke baare mein **haqiqat** hai.
+- **FAIL** = koi andar aa sakta hai, ya app chal hi nahi sakti — app key, production mein debug, pending migrations, koi operator nahi, demo accounts, koi owner jo abhi bhi "password" se login karta ho (**naam le kar**, kyunke "kuch accounts weak hain" logon ko user table mein dhoondne bhejta hai aur dhoondna hi nahi hota), credential notes, non-writable paths.
+- **WARN** = asli risk magar dukaan chal sakti hai — http, insecure cookie, HSTS off, `MAIL_MAILER=log` (**password reset kaam karta lagta hai aur mail aati hi nahi**), uncached config, storage link, ruka hua cron, backups.
+- Sirf failures exit code set karte hain → pipeline mein waise hi lag sakti hai. `--strict` warnings ko bhi failure bana deta hai.
+- ⚠️ Ye **dawa nahi karti** ke install mehfooz hai — sirf ye ke *jo ghaltiyan sasti hain check karne mein, wo nahi hui*. Ye server, DB grants ya network mein kuch nahi dekhti, aur ye baat command ke docblock mein likhi hui hai.
+
+**4) Scheduler heartbeat**
+- Jo cron entry kabhi install hui hi nahi, wo bilkul **aik khamosh hafte jaisa** lagta hai. Kisi ko pata nahi chalta jab tak koi dukaan na poochhe ke uske held sales March se kyun jama ho rahe hain.
+- Ab schedule har 5 minute pe nishan chhorta hai. Ye **wahid** task hai `onOneServer`/`withoutOverlapping` ke bagair — wo flags us kaam ke liye hain jo **aik baar** hona chahiye; heartbeat ko aik server pe pin karna matlab mare hue node ki khamoshi sehatmand lagti. Phase 13 ka test ab ye exemption sarahatan rakhta hai.
+
+**5) Do env files jo drift nahi kar sakte**
+- `.env.example` mein ab is app ki apni config ke saare keys hain. `.env.production.example` wohi file hai alag jawabon ke saath, aur **aik test dono ke keys identical hone par pin karta hai** — doosri env file ka failure mode ye nahi ke wo ghalat ho, balke ye ke koi aik mein setting add kare aur doosri **chupke se saal bhar purani** reh jaye.
+- `APP_KEY` aur `DB_PASSWORD` khali hain: committed file mein qabil-e-yaqeen placeholder wo credential hai jo koi na koi aakhir ship kar hi deta hai.
+
+---
+
+#### Session 2 — bure deploy se bachna (#95, #180, #192)
+
+**6) `pos:backup` (#95)**
+- Dump **aur uploaded files** dono. `products.image_path` aur `expenses.attachment_path` **pointers** hain; rows restore kar ke files na hon to catalogue toote images se bhara hota hai aur expense trail ke receipts gayab — **aur jis pointer ke peeche kuch na ho wo data jaisa lagta hai.**
+- Credentials temporary defaults-file mein, command line pe **kabhi nahi**: `mysqldump -pSECRET` chalte waqt `ps` mein har user ko dikhta hai, aur asli database pe wo minute-ha-minute hota hai. Wahi dalil jo `pos:make-admin` ko `--password` se rokti hai.
+- **Jis dump ne file banayi wo zaroori nahi ke backup bana ho.** mysqldump sirf header likh kar exit 0 de sakta hai, aur wo file archive mein bilkul asli jaisi baithi rehti hai jab tak koi zaroorat na parre. Completion marker check hota hai aur adhoora dump **file hone se inkar** kar deta hai.
+- Pruning sirf **apne** archives ko chhoti hai — jis folder ko operator kisi aur cheez ke liye bhi istemal karta ho, wo uski files delete karne ki wajah nahi.
+- **Local destination ki warning har baar** print hoti hai. Database ke bagal mein para archive **ghalti se bachata hai aur bas** — na mari hui disk se, na aag se, na ransomware se (jo backups folder ko baqi sab ke saath encrypt kar deta hai). **Hara tick hi wo cheez hai jis se log samajh lete hain ke wo mehfooz hain.**
+- Schedule 01:00 — 02:00 wale integrity sweep se **pehle**: agar sweep drift pakre to newest archive us repair se **pehle** ka hona chahiye. Aik test comment pe bharosa karne ke bajaye ye tarteeb assert karta hai.
+
+**✅ Restore kar ke verify kiya, bharosa nahi kiya** — *"jo backup kabhi restore na kiya gaya ho wo backup nahi, file hai."*
+- archive → scratch database → har financial table live wale se **bilkul match**: sales 6 · items 12 · movements 24 · ledger 13 · products 5.
+- Aur phir restored copy pe `pos:check-integrity` → **"Everything reconciles."** Yaani data sirf **mojood** nahi, **durust** bhi hai.
+
+**7) Browser floor (#180)** — declare kiya, inherit nahi.
+- Ye pasand nahi hai: **Tailwind v4 `color-mix()`, `@property` aur cascade layers pe bana hai**, to Chrome/Edge 111, Firefox 128, Safari 16.4 se neeche styling **degrade nahi hoti — hoti hi nahi**. Vite ka default target isse neeche tha, matlab hum un browsers ko JS bhej rahe the jo us page ko render hi nahi kar sakte jise wo JS chalata hai.
+- `<x-browser-notice>` purane browser ko batata hai ke screen kyun kharab lag rahi hai. **`@supports` se, UA string se nahi** — UA wo dawa hai jo browser apne baare mein khud karta hai, har vendor bees saal se us mein jhoot bolta aaya hai, aur aaj likha gaya sniff agle saal aane wale browser ko refuse kar dega.
+- ⚠️ **Rule ki direction ahem hai:** base `display: block`, aur `@supports` block hi usay **chhupata** hai. Jo browser `@supports` parse hi nahi kar sakta wo us block ko ignore karta hai aur **notice dekh leta hai** — yehi sahi taraf hai. Browser mein CSSOM se ye direction prove ki gayi.
+- Koi external CSS nahi, koi JavaScript nahi: **jo stylesheet wo parse nahi kar sakta, wohi cheez is paighaam ko chhupa deti.**
+- Ye aam site se zyada yahan ahem hai kyunke **dukaan ka till aksar building ka sab se purana computer hota hai**, aur iske bagair usay bina style ka text ka dher milta hai — jis ka qudrati natija ye hai ke "product toota hua hai", aur wo aisi support call hai jo phone pe hal nahi hoti.
+
+**8) README (#192)** — poora rewrite. Purana README **300 tests aur 31 migrations** keh raha tha aur us mein koi deployment section hi nahi tha.
+- Ab: local install, **6-step production deploy** (jis mein #2 sarahatan batata hai ke *kya nahi* hota), backup + **restore procedure jo zaroorat se pehle karni hai**, scheduled work ki table, browser floor, config table, aur repo layout.
+
+**9) `LOGIN_CREDENTIALS.md` hata diya** — repo public hone se pehle. Demo logins ab `DemoSeeder` chalte waqt print hote hain, us machine pe jisne seed kiya. **Aik jagah likh kar rakhe gaye default credentials wo default credentials hain jo koi na koi dhoond leta hai.** `pos:preflight` ka check baqi hai magar ab commoner raste ke liye: developer apne notes deploy ke saath upar copy kar deta hai.
+
+**🐞 Carbon 3 ka float phir kaat gaya** — `diffInHours`/`diffInMinutes` pe `(int)` chahiye tha, warna preflight backup ko *"0.023658340555556h old"* batati thi. Wahi khandan jismein Phase 9 ka `diffInDays` tha.
+
+---
+
+**⚠️ Tests — 21 naye, sab PASS**
+- `Deployment/PreflightTest` (14): demo seeder production mein inkar karta hai · staging phir bhi maang sakta hai · production seed **vocabulary lagata hai aur koi account nahi** · console se operator banta hai · console pe wohi password policy · preflight demo logins pe fail · **weak accounts ka naam leti hai** · saaf install pe pass · `--strict` warnings ko failure banata hai · ruka hua scheduler report karti hai · operator na hone pe fail · **dono env files ke keys identical** · production example waqai production-shaped hai · **jo env key app apni config se parhta hai wo documented hai**.
+- `Deployment/BackupTest` (7): dump + uploaded files · dump asli hai, khali file nahi · `--database-only` files chhorta hai · **local destination har baar batata hai ke ye asal backup nahi** · purane archives prune, baqi kuch nahi chhua · missing mysqldump **path naam le kar** fail · **backup integrity sweep se pehle chalta hai**.
+- **Result: `php artisan test` → 757 tests / 2,937 assertions PASS**
+
+**✅ Browser verification**
+- Notice DOM mein hai aur supporting browser (Chrome 148) pe `display: none`. CSSOM se rule ki direction prove ki: base `block`, `@supports` = `none`.
+- Responsive: mobile 375 aur tablet 768 dono pe **koi horizontal overflow nahi** (`scrollWidth === innerWidth`), dashboard cards/chart theek stack hote hain.
+- Production install path scratch database pe: local `migrate:fresh --seed` → demo shop; production `migrate --seed --force` → **0 admins, 0 users, 0 businesses** · 57 features, 5 plans; phir preflight ne theek do blockers pakre.
+
+**⬜ Poore project mein baqi:** sirf **onboarding wizard (#86)** — Phase 13 se jaan boojh kar chhora hua; dashboard wali self-emptying "getting set up" checklist iska aadha maqsad pura karti hai.
+
+➡️ **Phases 0–15 mukammal.**
 
 
 ### 2026-09-01 — Phase 14 MUKAMMAL ✅ (security + testing)
@@ -1626,12 +1705,12 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 ## PHASE 15 — Deployment Preparation
 *(Spec ref: #95, #112, #114–115, #180, #191–192)*
 
-- [ ] Seeders: Super Admin, plans, demo business/branch/POS/products/customers/suppliers — #112, #114
-- [ ] Demo credentials (change on prod) — #191
-- [ ] Installation documentation (README) — #192
-- [ ] Backup-ready architecture — #95
-- [ ] Production `.env` / config — #115
-- [ ] Browser support check (Chrome/Edge priority) — #180
+- [x] Seeders: Super Admin, plans, demo business/branch/POS/products/customers/suppliers — #112, #114 *(`DatabaseSeeder` = sirf registries + plan catalogue; `DemoSeeder` baqi sab aur production mein chalta hi nahi; `pos:make-admin` se asli operator)*
+- [x] Demo credentials (change on prod) — #191 *(structural: production seed **koi account banata hi nahi**; `pos:preflight` demo accounts aur "password" wale owners ko **naam le kar** FAIL karti hai; `LOGIN_CREDENTIALS.md` repo se hata diya)*
+- [x] Installation documentation (README) — #192 *(local + production dono, 6-step deploy, backup/restore procedure, scheduled work ki table, browser floor)*
+- [x] Backup-ready architecture — #95 *(`pos:backup` — dump + uploads, truncated dump refuse, retention, nightly 01:00; **restore kar ke verify kiya** aur restored copy pe `check-integrity` clean)*
+- [x] Production `.env` / config — #115 *(`.env.production.example` + `pos:preflight`; aik test dono env files ke keys identical hone pe pin karta hai)*
+- [x] Browser support check (Chrome/Edge priority) — #180 *(floor declare kiya — Tailwind v4 ki wajah se Chrome/Edge 111+; `<x-browser-notice>` `@supports` se, UA sniff se nahi)*
 
 ---
 

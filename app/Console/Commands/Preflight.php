@@ -190,14 +190,22 @@ class Preflight extends Command
 
     protected function checkCredentialsFile(): void
     {
-        $present = File::exists(base_path('LOGIN_CREDENTIALS.md'));
+        /*
+         | The repo no longer ships any of these — LOGIN_CREDENTIALS.md was
+         | deleted before it went public, because default credentials written
+         | down in one place are default credentials somebody finds. The check
+         | stays for the commoner route onto a server: a developer copying their
+         | own working notes up with the deploy.
+         */
+        $found = collect(['LOGIN_CREDENTIALS.md', 'CREDENTIALS.md', 'credentials.txt', '.env.backup'])
+            ->filter(fn (string $file) => File::exists(base_path($file)));
 
         $this->record(
-            $present && app()->isProduction() ? self::FAIL : ($present ? self::WARN : self::PASS),
-            'LOGIN_CREDENTIALS.md',
-            $present
-                ? 'Present. It lists every demo login and belongs on a developer machine, never on a server.'
-                : 'Not on this machine.',
+            $found->isEmpty() ? self::PASS : (app()->isProduction() ? self::FAIL : self::WARN),
+            'Credential notes',
+            $found->isEmpty()
+                ? 'None on this machine.'
+                : $found->implode(', ').' — these belong on a developer machine, never on a server.',
         );
     }
 
