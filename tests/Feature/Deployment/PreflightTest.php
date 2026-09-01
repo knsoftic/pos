@@ -224,10 +224,24 @@ class PreflightTest extends TestCase
     {
         $example = File::get(base_path('.env.example'));
 
-        // Only OUR config files — the framework's own files carry dozens of
-        // driver knobs nobody sets, and demanding those would make this test
-        // noise rather than a guard.
-        $ours = ['security', 'audit', 'uploads', 'platform', 'brand', 'inventory', 'subscription'];
+        /*
+         | ⚠️ DERIVED, NOT LISTED. This test used to carry a hand-written list of
+         | our config files — and `config/backup.php` was added later, never got
+         | added to the list, and its five keys went undocumented in BOTH env
+         | examples while this test sat there passing. A guard with a list you
+         | have to remember to update is the thing it was guarding against.
+         |
+         | So: everything in config/ EXCEPT the framework's own files, which
+         | carry dozens of driver knobs nobody sets.
+         */
+        $framework = ['app', 'auth', 'cache', 'database', 'filesystems', 'logging', 'mail', 'queue', 'services', 'session'];
+
+        $ours = collect(File::files(config_path()))
+            ->map(fn ($file) => $file->getFilenameWithoutExtension())
+            ->reject(fn (string $name) => in_array($name, $framework, true))
+            ->values();
+
+        $this->assertContains('backup', $ours->all(), 'The derivation must pick up new config files on its own.');
 
         $missing = [];
 
