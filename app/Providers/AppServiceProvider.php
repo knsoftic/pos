@@ -3,17 +3,23 @@
 namespace App\Providers;
 
 use App\Listeners\AuthEventSubscriber;
+use App\Listeners\LogRolledBackTransaction;
 use App\Models\User;
 use App\Services\FeatureService;
 use App\Services\PermissionService;
 use App\Services\PlanLimitService;
 use App\Services\PlatformSettingsService;
+use App\Services\SecurityLogger;
 use App\Services\SettingsService;
 use App\Support\BranchContext;
 use App\Support\PermissionRegistry;
 use App\Support\TenantContext;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Database\Events\TransactionRolledBack;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 
@@ -48,6 +54,14 @@ class AppServiceProvider extends ServiceProvider
         $this->app->scoped(PlanLimitService::class);
         $this->app->scoped(SettingsService::class);
         $this->app->scoped(PlatformSettingsService::class);
+
+        /*
+         | Scoped for a different reason: the logger mints ONE reference per
+         | request, and its whole purpose is that the code on the user's error
+         | page and the code in the log file are the same code. A fresh instance
+         | per injection would give them two.
+         */
+        $this->app->scoped(SecurityLogger::class);
     }
 
     /**
@@ -65,9 +79,55 @@ class AppServiceProvider extends ServiceProvider
 
         $this->configurePasswordPolicy();
         $this->registerPermissionGates();
+        $this->configureRateLimiters();
 
         // Authentication events (login/logout/failed/lockout/reset) → audit trail.
         Event::subscribe(AuthEventSubscriber::class);
+
+        /*
+        | A discarded transaction is the only failure that leaves no evidence in
+        | the database, so it has to leave some in a log (#94, #98). Listening
+        | for the rollback rather than editing fifty `DB::transaction` call
+        | sites means a service written next year is covered without knowing it.
+        */
+        Event::listen(TransactionRolledBack::class, LogRolledBackTransaction::class);
+    }
+
+    /**
+     * Named limiters for the endpoints that are expensive, unauthenticated, or
+     * both (#65, #100). Declared here rather than inline on the routes so the
+     * numbers stay in config/security.php and a limit can be tuned in
+     * production without a deploy.
+     */
+    protected function configureRateLimiters(): void
+    {
+        /*
+        | Note the config is read INSIDE the closure, per request, not captured
+        | here at boot. A limit read once at boot is a limit that cannot be
+        | changed without a restart — and, less obviously, one no test can turn
+        | down, which means nobody ever proves it fires.
+        */
+        $throttle = fn (string $key, string $setting) => RateLimiter::for(
+            $key,
+            fn (Request $request) => Limit::perMinute((int) config($setting))
+                ->by($request->user()?->id ?: $request->ip()),
+        );
+
+        /*
+        | Sign-up is the one that matters most: an unauthenticated endpoint that
+        | creates a business, a user and a subscription. Left open, a script
+        | fills the tenant list with junk that then has to be told apart from
+        | real shops by hand. Per HOUR, not per minute — nobody opens six shops
+        | in an hour, and a window that resets in sixty seconds stops nothing.
+        */
+        RateLimiter::for('register', fn (Request $request) => Limit::perMinutes(
+            (int) config('security.throttle.register_decay_minutes'),
+            (int) config('security.throttle.register_max_attempts'),
+        )->by($request->ip()));
+
+        $throttle('search', 'security.throttle.search_per_minute');
+        $throttle('export', 'security.throttle.export_per_minute');
+        $throttle('sale', 'security.throttle.sale_per_minute');
     }
 
     /**

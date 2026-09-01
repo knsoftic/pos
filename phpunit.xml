@@ -34,6 +34,11 @@
         <env name="DB_USERNAME" value="root"/>
         <env name="DB_PASSWORD" value=""/>
         <env name="DB_URL" value=""/>
+        <!-- RefreshDatabase rolls a transaction back per test; without this the
+             financial log would gain one "transaction discarded" line for every
+             one of them, which is how a log stops being read. Tests that
+             exercise the listener switch it back on for themselves. -->
+        <env name="LOG_ROLLBACKS" value="false"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

@@ -73,6 +73,46 @@ return [
             'replace_placeholders' => true,
         ],
 
+        /*
+        |----------------------------------------------------------------------
+        | security — who tried what, and was it stopped? (#94, #100)
+        |----------------------------------------------------------------------
+        | Kept in its own file so an operator reading it is reading only this:
+        | mixed into the application log, a lockout or a cross-tenant probe is a
+        | needle in a stack of deprecation warnings.
+        |
+        | Retained far longer than the application log. A breach is usually
+        | noticed weeks after it happened, and 14 days of history means the only
+        | honest answer to "when did this start?" is "we no longer know".
+        */
+        'security' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/security.log'),
+            'level' => env('SECURITY_LOG_LEVEL', 'info'),
+            'days' => (int) env('SECURITY_LOG_DAYS', 180),
+            'replace_placeholders' => true,
+        ],
+
+        /*
+        |----------------------------------------------------------------------
+        | financial — the sale did not save. what happened? (#94, #98)
+        |----------------------------------------------------------------------
+        | A rolled-back transaction leaves NO row anywhere; that is what a
+        | rollback is for. If the attempt is not written here at the moment it
+        | fails, it never existed, and the shop is left arguing with an empty
+        | table about money it believes it took.
+        |
+        | Retained a full year: this is the file support reads when a shop
+        | disputes a figure, and disputes surface at stock-take and at year end.
+        */
+        'financial' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/financial.log'),
+            'level' => env('FINANCIAL_LOG_LEVEL', 'info'),
+            'days' => (int) env('FINANCIAL_LOG_DAYS', 365),
+            'replace_placeholders' => true,
+        ],
+
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),

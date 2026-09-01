@@ -84,7 +84,11 @@ Route::get('{page}', [PageController::class, 'page'])
 */
 Route::middleware('guest:web')->group(function () {
     Route::get('register', [RegistrationController::class, 'create'])->name('register');
-    Route::post('register', [RegistrationController::class, 'store'])->name('register.store');
+    // Throttled per IP and per HOUR (#100): this one endpoint creates a
+    // business, a user and a subscription without anybody signing in, and a
+    // limit that resets in sixty seconds would not slow a script down at all.
+    Route::post('register', [RegistrationController::class, 'store'])
+        ->middleware('throttle:register')->name('register.store');
 });
 
 /*
@@ -233,7 +237,7 @@ Route::middleware('tenant.app')
         });
 
         Route::get('products-transfer/export', [ProductImportController::class, 'export'])
-            ->middleware('permission:reports.export')->name('products.export');
+            ->middleware(['permission:reports.export', 'throttle:export'])->name('products.export');
 
         // ---- inventory (#28, #30, #31, #136) --------------------------------
         // Reading stock and changing it are separate authorities: a shop floor
@@ -364,10 +368,17 @@ Route::middleware('tenant.app')
                 Route::get('/', [PosController::class, 'index'])->name('index');
 
                 // JSON, called constantly, never reloading the page (#90).
-                Route::get('search', [PosController::class, 'search'])->name('search');
-                Route::get('scan', [PosController::class, 'scan'])->name('scan');
+                Route::middleware('throttle:search')->group(function () {
+                    Route::get('search', [PosController::class, 'search'])->name('search');
+                    Route::get('scan', [PosController::class, 'scan'])->name('scan');
+                });
 
-                Route::post('checkout', [PosController::class, 'checkout'])->name('checkout');
+                // Deliberately loose. A till that refuses a sale is worse than
+                // almost anything this limit prevents; the real defence against
+                // a double submit is the per-cart idempotency key and its unique
+                // index. This is only a ceiling on something pathological.
+                Route::post('checkout', [PosController::class, 'checkout'])
+                    ->middleware('throttle:sale')->name('checkout');
 
                 Route::post('hold', [PosController::class, 'hold'])->name('hold');
                 Route::get('holds/{sale}', [PosController::class, 'resumeHold'])->name('holds.resume');
@@ -485,7 +496,10 @@ Route::middleware('tenant.app')
         | that guards each module's own screen. A route-level gate would have to
         | be the strictest of five and would silence the box for most people.
         */
-        Route::get('search', SearchController::class)->name('search');
+        // Fires on every keystroke, so the ceiling sits well above a fast
+        // typist — it is here to stop a runaway loop, not a person.
+        Route::get('search', SearchController::class)
+            ->middleware('throttle:search')->name('search');
 
         // ---- expenses & other income (#43, #44) -----------------------------
         Route::middleware('feature:accounting.expenses')->group(function () {
@@ -553,7 +567,7 @@ Route::middleware('tenant.app')
             // Taking figures OUT of the system is its own authority: an export
             // leaves with the person who made it and outlives their account.
             Route::get('reports/{report}/export/{format}', [ReportController::class, 'export'])
-                ->middleware('permission:reports.export')
+                ->middleware(['permission:reports.export', 'throttle:export'])
                 ->name('reports.export');
         });
 
@@ -693,3 +707,4 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('notifications/reconcile', [SystemNotificationController::class, 'reconcile'])->name('notifications.reconcile');
     });
 });
+
