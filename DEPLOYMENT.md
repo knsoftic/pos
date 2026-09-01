@@ -99,6 +99,14 @@ fatal: destination path '.' already exists and is not an empty directory
 Us file se larne ki zaroorat nahi — wo aaPanel ki `open_basedir` protection hai.
 Repo ko wahin `git init` se le aayen, aur usay chhor dein:
 
+Directory `www` ki milkiyat mein hai (aaPanel ne banayi) aur aap git root se
+chala rahe hain, is liye pehle git ko batana hoga ke ye jagah theek hai — warna
+har command `detected dubious ownership` par ruk jayegi:
+
+```bash
+git config --global --add safe.directory /www/wwwroot/pos.knbazaar.com
+```
+
 ```bash
 cd /www/wwwroot/pos.knbazaar.com
 git init
@@ -106,6 +114,10 @@ git remote add origin https://github.com/knsoftic/pos.git
 git fetch origin
 git checkout -f -b master origin/master
 ```
+
+⚠️ Git root se chal raha hai, to jo files wo likhega wo **root** ki milkiyat
+mein hongi — jabke nginx aur PHP-FPM `www` se chalte hain. Isi liye **step 9 ka
+`chown -R www:www .` optional nahi hai**; wo na karein to site 500 dene lagegi.
 
 `index.html` aur `404.html` bhi rehne dein — step 5 ke baad nginx `public/` se
 serve karega, site root se nahi, to wo kabhi khulti hi nahi.
