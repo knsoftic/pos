@@ -38,9 +38,18 @@ class AuthenticationTest extends TestCase
 
     // ------------------------------------------------------- business (web)
 
-    public function test_root_url_sends_visitors_to_the_login_screen(): void
+    public function test_the_root_url_is_the_marketing_site_with_a_way_in(): void
     {
-        $this->get('/')->assertRedirect(route('login'));
+        /*
+        | ⚠️ This changed in Phase 12 and changed correctly. The root used to
+        | redirect to the login screen because there was no website yet;
+        | now it IS the website, and bouncing a prospective customer straight to
+        | a login form would be the wrong thing for the one page most visitors
+        | see first (#106, #107).
+        */
+        $this->get('/')
+            ->assertOk()
+            ->assertSee(route('login'), false);
     }
 
     public function test_login_screen_can_be_rendered(): void

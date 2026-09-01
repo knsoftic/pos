@@ -16,7 +16,7 @@
 | **Environment** | Windows 11 + XAMPP (PHP + MySQL/MariaDB) |
 | **Start Date** | 2026-08-25 |
 | **Demo logins** | [LOGIN_CREDENTIALS.md](LOGIN_CREDENTIALS.md) — seeded accounts (dev only, #191) |
-| **Current Status** | ✅ **Phase 11 MUKAMMAL (100%)** — Dukaan ki settings (#57–60, #153–157) **aur** SaaS operator ki settings: branding (#111), platform settings (#110), maintenance mode (#160), announcements (#77), notifications bell (#76). **Phases 0–11 mukammal.** **644 tests / 2,533 assertions pass**. Build + browser verified: 7 settings tabs, receipt QR, admin console ke settings/announcements, maintenance (503) jabke `/admin` khula. ➡️ **Next: Phase 12** (Public website + pricing + trial registration). |
+| **Current Status** | ✅ **Phase 12 MUKAMMAL (100%)** — Public marketing site (8 pages), pricing **jo asli plans se banti hai** (#108), aur self-service sign-up trial ke saath (#109). **Phases 0–12 mukammal.** **663 tests / 2,621 assertions pass**. Build + browser verified: home, pricing (cycle toggle), feature pages, mobile 375px. ➡️ **Next: Phase 13** (Animations + UI polish + performance). |
 
 ---
 
@@ -48,17 +48,58 @@
 | **9** | Expenses + Profit & Loss | ✅ Ho gaya | 100% |
 | **10** | Reports | ✅ Ho gaya | 100% |
 | **11** | Settings + Receipt + QR + Barcode | ✅ Ho gaya | 100% |
-| **12** | Public Website + Pricing + Trial Registration | ⬜ Baqi | 0% |
+| **12** | Public Website + Pricing + Trial Registration | ✅ Ho gaya | 100% |
 | **13** | Animations + UI Polish + Performance | ⬜ Baqi | 0% |
 | **14** | Security + Testing | 🔄 Chal raha hai | ~25% |
 | **15** | Deployment Preparation | ⬜ Baqi | 0% |
-| | **TOTAL PROGRESS** | 🟢 | **~87%** |
+| | **TOTAL PROGRESS** | 🟢 | **~90%** |
 
 ---
 
 ## 📝 Session Log (Kaam ki History)
 
 > Naya kaam upar add karo (newest first). Har entry mein: **date**, **kya hua**, **kya next hai**.
+
+
+### 2026-09-01 — Phase 12 MUKAMMAL ✅ (public website + pricing + sign-up)
+
+Pehli dafa is system ka aik rukh un logon ke liye jinke paas abhi account hai hi nahi.
+
+**✅ JO HO GAYA:**
+
+**1) Alfaz aik jagah, shakl aik jagah (#106, #107)**
+- Marketing ke paanch page dar-asal **aik hi page** hain mukhtalif lafzon ke saath: aik hero, aik list, do proof points, aik call to action. Paanch alag templates likhne ka matlab hota ke wo waqt ke saath **bikhar** jate — aik ko naya section milta, aik purani baat pakre rehta, aur dasvi tabdeeli chaar jagah karni parti.
+- Isi liye **shakl aik Blade file mein** hai aur **alfaz `MarketingContent` mein**. Naya page = array mein aik entry; koi da'wa badalna = aik line, aik jagah jahan ghair-developer ko bhi bheja ja sakta hai.
+- ⚠️ Har bullet wo cheez naam leta hai jo **phases 1–11 mein waqai ban chuki** hai. Marketing page pe wo baat likhna jo software kar hi nahi sakta, sab se mehnga jhoot hai.
+
+**2) Pricing wo hai jo plans hain (#108, #172)**
+- Cards, qeematein aur feature ticks **sab `plans` table se**. Jo pricing page apne plans se alag maintain hoti hai wo aik din aisa number likh degi jo system charge karne se **inkar** kar dega — aur wo customer jisne pakra, sahi hai.
+- **Sirf active + public plans.** Jo plan operator kisi negotiated deal ya legacy customer ke liye rakhta hai wo aik checkbox unticked karne se website se hat jata hai, aur bas yehi aik cheez usay yaad rakhni chahiye.
+- Cycle toggle sirf un cycles ke liye jinki kisi plan ke paas asli qeemat hai. Jo cycle plan bechta hi nahi wo **"Not sold yearly"** likhta hai — us number se behtar jo kisi se liya hi nahi ja sakta.
+- Aur agar kuch public nahi to page **saaf keh deta hai** ke abhi kuch shaya nahi hua — banaye hue numbers dikhane se behtar.
+
+**3) Sign-up wohi rasta hai jo admin console ka hai (#109)**
+- `RegistrationService` khud rows nahi likhti: `OrganizationProvisioner` + `SubscriptionService` se guzarti hai. Isi liye website se bani dukaan **kabhi** us dukaan se mukhtalif nahi ho sakti jo support ne banai — warna wo bug hafton baad kisi aik raste mein nikalta jo main branch banana bhool gaya.
+- **Sab kuch ya kuch nahi.** Aadha bana account nakaam sign-up se **bura** hai: email ab le liya gaya aur banda dobara koshish bhi nahi kar sakta.
+- Switch **do baar** check hota hai — form dikhane se pehle (courtesy) aur likhne se pehle (guard). Jo form load ke waqt khula tha wo submit ke waqt band ho sakta hai, aur bookmark ne kabhi ijazat maangi hi nahi.
+- 🐞 Yahan aik asli bug pakra: entry plan **Free** hone par `startTrial()` chal rahi thi — aur trial ki **hamesha aik end date** hoti hai. Matlab muft plan expire hota, aur malik se aisi cheez renew karne ko kaha jata jo muft hai. Ab: **free plan assign hota hai, trial nahi**, aur marketing pages `RegistrationService::trialDays()` parhte hain taake aisa trial na bechein jo diya hi nahi jayega.
+
+**🐞 Do aur bugs, dono purane sabaq:**
+- **`days@endif`** — Blade ka directive regex `\B@` hai, to lafz se chipki hui directive **compile hoti hi nahi** aur file "unexpected end of file" pe mar jati hai. (Ye gotcha log mein pehle se likha tha aur **phir bhi** ho gaya.) Ab wo jumla PHP mein banta hai.
+- **Public layout pe Alpine tha hi nahi.** Is project mein Alpine **Livewire ke andar** aata hai, to jis layout mein `@livewireScripts` nahi uspe har `x-data` chup-chaap kuch nahi karta — pricing toggle aur mobile menu dono murda the. Browser pe pakra: chaaron cycles ki qeematein aik saath dikh rahi thin.
+
+**⚠️ Tests — 19 naye, sab PASS**
+- `PublicSite/PublicSiteTest` (19): saare 8 pages render · anjaan slug 404 · **public site operator ki branding pehnti hai** · maintenance mein public site bhi band · pricing asli plans se · **private/inactive plan website tak pohanchta hi nahi** · na bikne wala cycle saaf kehta hai · khali catalogue jhoot nahi bolta · sign-up default band · plan na ho to band · logged-in banda doosri dukaan nahi bana sakta · **sign-up poori chalti hui dukaan banati hai** (branch + till + roles + subscription + sign-in) · paid plan pe trial · **free plan assign, trial nahi** · nakaam sign-up kuch nahi chhorta · form ke lazmi khane · **public form khud ko doosri business mein nahi ghusa sakta** · aik jaise naam ke do shops ke slug alag · nayi dukaan khali aur isolated.
+- 🐞 Aik purana test toota aur **theek toota**: `/` ab login pe redirect nahi karta, wo **website hai**. Naye customer ko seedha login form pe phenkna us page ke liye ghalat hai jo zyadatar log sab se pehle dekhte hain.
+- **Result: `php artisan test` → 663 tests / 2,621 assertions PASS**
+
+**✅ Browser verification**
+- Home (hero + 3 pillars + module cards + plans + FAQ + CTA), `/inventory` feature page, `/pricing` cycle toggle (Monthly $15/$39/$89 → Yearly $150/$390/$890), `/faq`, `/contact`.
+- Mobile 375px: horizontal scroll nahi, hamburger menu.
+- Sign-up demo install pe wapas **band** kar diya gaya (safe default).
+
+➡️ **Next: Phase 13** — Animations + UI polish + performance (#71–75, #86–88, #92, #96–97, #120–124, #163–171, #199).
+
 
 
 ### 2026-09-01 — Phase 11 MUKAMMAL ✅ (Session 2 — SaaS operator ki settings)
@@ -1356,10 +1397,10 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 ## PHASE 12 — Public Website + Pricing + Trial Registration
 *(Spec ref: #106–109, #172)*
 
-- [ ] Public marketing website (Home/Features/POS/Inventory/Reports/Pricing/FAQ/Contact) — #106
-- [ ] Home page (hero + sections + CTA + footer) — #107
-- [ ] Pricing page (auto from active public plans) — #108
-- [ ] Registration (public signup + trial assign + admin ON/OFF) — #109
+- [x] Public marketing website (Home/Features/POS/Inventory/Reports/Pricing/FAQ/Contact) — #106 *(alfaz `MarketingContent` mein, shakl aik template mein)*
+- [x] Home page (hero + sections + CTA + footer) — #107
+- [x] Pricing page (auto from active public plans) — #108 *(cycle toggle + comparison, sab `plans` se)*
+- [x] Registration (public signup + trial assign + admin ON/OFF) — #109 *(wohi rasta jo admin console ka hai)*
 
 ---
 

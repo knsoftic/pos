@@ -44,16 +44,47 @@ use App\Http\Controllers\Auth\AdminLoginController;
 use App\Http\Controllers\Auth\BusinessLoginController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
+use App\Http\Controllers\Public\PageController;
+use App\Http\Controllers\Public\PricingController;
+use App\Http\Controllers\Public\RegistrationController;
 use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
-| Public
+| Public — the marketing website (#106–#109)
 |--------------------------------------------------------------------------
-| The marketing website (landing, pricing, trial registration) is built in
-| Phase 14. For now the root simply routes visitors to the business login.
+| No middleware beyond the `web` group: these pages are for people who do not
+| have an account yet, which is the entire point of them.
+|
+| ⚠️ They still sit behind ApplyPlatformSettings and EnforceMaintenanceMode, so
+| the operator's branding reaches them and a closed platform does not sell
+| itself to somebody who cannot then sign in (#110, #160).
 */
-Route::get('/', fn () => redirect()->route('login'))->name('home');
+Route::get('/', [PageController::class, 'home'])->name('home');
+
+Route::get('pricing', [PricingController::class, 'index'])->name('pricing');
+Route::get('faq', [PageController::class, 'faq'])->name('faq');
+Route::get('contact', [PageController::class, 'contact'])->name('contact');
+
+/*
+| Features, POS, Inventory, Reports — one template, four sets of words held in
+| MarketingContent. The `where` keeps the route from swallowing every unmatched
+| path and turning a typo into a 500 instead of a 404.
+*/
+Route::get('{page}', [PageController::class, 'page'])
+    ->whereIn('page', ['features', 'pos', 'inventory', 'reports'])
+    ->name('page');
+
+/*
+| Sign-up (#109). `guest:web` because somebody already signed in has a shop —
+| sending them here would offer to create a second one under their own login.
+| The registration switch itself is checked in the controller AND again in the
+| service, since a form that was open on load can be closed on submit.
+*/
+Route::middleware('guest:web')->group(function () {
+    Route::get('register', [RegistrationController::class, 'create'])->name('register');
+    Route::post('register', [RegistrationController::class, 'store'])->name('register.store');
+});
 
 /*
 |--------------------------------------------------------------------------
