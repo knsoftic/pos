@@ -18,7 +18,8 @@
         ['label' => 'Alerts',        'icon' => 'bell',        'href' => route('admin.notifications.index'), 'active' => request()->routeIs('admin.notifications.*'), 'badge' => $alertCount],
         // Phase 3 (#110 operator settings, #180 admin accounts).
         ['label' => 'Admins',        'icon' => 'shield',      'href' => null, 'active' => false],
-        ['label' => 'Settings',      'icon' => 'settings',    'href' => null, 'active' => false],
+        ['label' => 'Announcements', 'icon' => 'mail',        'href' => route('admin.announcements.index'), 'active' => request()->routeIs('admin.announcements.*')],
+        ['label' => 'Settings',      'icon' => 'settings',    'href' => route('admin.settings.index'), 'active' => request()->routeIs('admin.settings.*')],
     ];
 @endphp
 

@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\FeatureService;
 use App\Services\PermissionService;
 use App\Services\PlanLimitService;
+use App\Services\PlatformSettingsService;
 use App\Services\SettingsService;
 use App\Support\BranchContext;
 use App\Support\PermissionRegistry;
@@ -46,6 +47,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->scoped(FeatureService::class);
         $this->app->scoped(PlanLimitService::class);
         $this->app->scoped(SettingsService::class);
+        $this->app->scoped(PlatformSettingsService::class);
     }
 
     /**
@@ -59,6 +61,7 @@ class AppServiceProvider extends ServiceProvider
         | default" would have nothing to compare against — see SettingsService.
         */
         SettingsService::snapshotDefaults();
+        PlatformSettingsService::snapshotDefaults();
 
         $this->configurePasswordPolicy();
         $this->registerPermissionGates();

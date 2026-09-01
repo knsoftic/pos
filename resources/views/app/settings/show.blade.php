@@ -212,8 +212,51 @@
                     </div>
                 @endunless
 
+            {{-- ═══════════════════ the shop's own payment QR ════════════════ --}}
             {{-- ═══════════════════════════ the knobs ═════════════════════════ --}}
             @else
+
+            @if ($group === 'payment')
+                <form method="POST" action="{{ route('app.settings.payment-qr') }}" enctype="multipart/form-data" class="card p-5">
+                    @csrf @method('PUT')
+
+                    <h3 class="font-semibold text-slate-900 dark:text-white">Payment QR</h3>
+                    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        Your wallet or bank code, shown full-screen at the till for a customer to scan. Upload the
+                        image your provider gave you — we do not generate it, because what a wallet encodes is the
+                        wallet's business and every country does it differently.
+                    </p>
+
+                    <div class="mt-4 flex flex-wrap items-center gap-4">
+                        @if ($paymentQr)
+                            <img src="{{ Storage::disk(config('uploads.products.disk'))->url($paymentQr) }}"
+                                 alt="Payment QR" class="h-24 w-24 rounded-xl border border-slate-200 object-contain p-1 dark:border-slate-700" />
+                        @else
+                            <span class="flex h-24 w-24 items-center justify-center rounded-xl border border-dashed border-slate-300 text-xs text-slate-400 dark:border-slate-700">
+                                None yet
+                            </span>
+                        @endif
+
+                        <div class="min-w-0 flex-1">
+                            <input type="file" name="payment_qr" accept=".jpg,.jpeg,.png,.webp"
+                                   class="block w-full text-sm text-slate-500 file:mr-4 file:rounded-lg file:border-0 file:bg-slate-100 file:px-4 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200 dark:text-slate-400 dark:file:bg-slate-800 dark:file:text-slate-200" />
+                            @error('payment_qr') <p class="mt-1 text-xs text-rose-600 dark:text-rose-400">{{ $message }}</p> @enderror
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            @if ($paymentQr)
+                                <button type="submit" name="remove_qr" value="1" class="btn btn-ghost">
+                                    <x-icon name="trash" class="h-4 w-4" /> Remove
+                                </button>
+                            @endif
+                            <button type="submit" class="btn btn-secondary">
+                                <x-icon name="check" class="h-4 w-4" /> Upload
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            @endif
+
                 {{-- ⚠️ The reset form is a SIBLING, not a child: HTML has no nested
                      forms, and a browser silently drops the inner one — so the
                      "back to defaults" button would have posted the settings

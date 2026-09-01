@@ -18,8 +18,18 @@
 
 @php
     $gradientId = 'kn-mark-'.Str::random(6);
+
+    // A white-label operator's own mark, if they have uploaded one (#111).
+    $uploaded = config('brand.logo_path');
 @endphp
 
+@if ($uploaded)
+    <span {{ $attributes->merge(['class' => 'inline-flex shrink-0 items-center justify-center '.$class]) }}>
+        <img src="{{ Storage::disk(config('uploads.products.disk'))->url($uploaded) }}"
+             alt="{{ config('brand.name') }}"
+             class="h-full w-auto max-w-full object-contain {{ $rounded }}" />
+    </span>
+@else
 <span {{ $attributes->merge(['class' => 'inline-flex shrink-0 items-center justify-center '.$class]) }}>
     <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"
          class="h-full w-full {{ $rounded }} shadow-sm shadow-brand-900/20"
@@ -42,3 +52,4 @@
         <circle cx="36.4" cy="15.6" r="2.4" fill="white" fill-opacity="0.55" />
     </svg>
 </span>
+@endif

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\App;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\App\BusinessProfileRequest;
+use App\Http\Requests\App\PaymentQrRequest;
 use App\Http\Requests\App\SettingsRequest;
 use App\Models\TaxRate;
 use App\Services\FeatureService;
@@ -69,6 +70,7 @@ class SettingsController extends Controller
                 : $this->availableIn($group),
             'timezones' => \DateTimeZone::listIdentifiers(),
             'taxRates' => $group === 'taxes' ? TaxRate::query()->ordered()->get() : collect(),
+            'paymentQr' => $this->settings->get('pos.payment_qr_path'),
             'canManageTax' => $this->features->enabled(FeatureRegistry::SALES_TAX),
         ]);
     }
@@ -99,6 +101,38 @@ class SettingsController extends Controller
         $business->fill($data)->save();
 
         return back()->with('success', 'Business details saved.');
+    }
+
+    /**
+     * The shop's own payment QR (#57) — their wallet or bank code, shown to a
+     * customer at the till. Uploaded rather than generated: what a wallet
+     * encodes is the wallet's business, and guessing would be wrong in most
+     * countries.
+     */
+    public function updatePaymentQr(PaymentQrRequest $request): RedirectResponse
+    {
+        $disk = config('uploads.products.disk');
+        $previous = $this->settings->get('pos.payment_qr_path');
+
+        if ($request->boolean('remove_qr')) {
+            $this->settings->put(['pos.payment_qr_path' => null]);
+
+            if ($previous) {
+                Storage::disk($disk)->delete($previous);
+            }
+
+            return back()->with('success', 'Payment QR removed.');
+        }
+
+        $path = $request->file('payment_qr')->store(config('uploads.products.path').'/payment-qr', $disk);
+
+        $this->settings->put(['pos.payment_qr_path' => $path]);
+
+        if ($previous && $previous !== $path) {
+            Storage::disk($disk)->delete($previous);
+        }
+
+        return back()->with('success', 'Payment QR updated.');
     }
 
     public function update(SettingsRequest $request, string $group): RedirectResponse
@@ -139,7 +173,11 @@ class SettingsController extends Controller
     {
         return array_filter(
             SettingRegistry::group($group),
-            fn (array $definition) => ! isset($definition['feature']) || $this->features->enabled($definition['feature']),
+            fn (array $definition) => (! isset($definition['feature']) || $this->features->enabled($definition['feature']))
+                // Hidden entries go through the same store and the same "back
+                // to defaults", but a file is not a text box, so the generic
+                // form skips them and the tab draws its own control.
+                && ! ($definition['hidden'] ?? false),
         );
     }
 }

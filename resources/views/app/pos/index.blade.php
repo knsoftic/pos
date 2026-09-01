@@ -19,6 +19,7 @@
             recent: @js($recent),
             customers: @js($customers),
             paymentMethods: @js($paymentMethods),
+            showQr: false,
             creditMethod: @js($creditMethod),
             cashMethods: @js($cashMethods),
             rounding: {{ $rounding }},
@@ -301,6 +302,16 @@
         <div x-show="paying" x-cloak
              class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
              @click.self="paying = false">
+            @if ($paymentQr)
+                <div x-show="showQr" x-cloak @click="showQr = false"
+                     class="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-white p-6 dark:bg-slate-900">
+                    <img src="{{ Storage::disk(config('uploads.products.disk'))->url($paymentQr) }}"
+                         alt="Payment QR" class="max-h-[70vh] w-auto max-w-full rounded-2xl" />
+                    <p class="text-lg font-semibold tabular-nums text-slate-900 dark:text-white" x-text="money(total())"></p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Tap anywhere to close</p>
+                </div>
+            @endif
+
             <div class="card w-full max-w-lg p-5">
                 <div class="flex items-start justify-between">
                     <div>
@@ -330,6 +341,16 @@
                     <button type="button" @click="addTender()" class="btn btn-ghost !px-0 text-sm text-brand-600 dark:text-brand-400">
                         <x-icon name="plus" class="h-4 w-4" /> Split across another method
                     </button>
+
+                    {{-- The shop's own payment QR (#57). Full-screen on demand,
+                         because the customer is holding a phone on the other
+                         side of the counter and a thumbnail cannot be scanned. --}}
+                    @if ($paymentQr)
+                        <button type="button" @click="showQr = true"
+                                class="btn btn-secondary w-full !py-2 text-sm">
+                            <x-icon name="zap" class="h-4 w-4" /> Show the payment QR
+                        </button>
+                    @endif
                 </div>
 
                 {{-- Quick cash buttons: what a customer actually hands over --}}

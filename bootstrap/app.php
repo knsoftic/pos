@@ -1,9 +1,12 @@
 <?php
 
+use App\Http\Middleware\ApplyPlatformSettings;
 use App\Http\Middleware\CheckFeature;
 use App\Http\Middleware\CheckPermission;
 use App\Http\Middleware\CheckSubscription;
+use App\Http\Middleware\EnforceMaintenanceMode;
 use App\Http\Middleware\SetBusinessTenant;
+use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -17,6 +20,19 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        /*
+         | The operator's settings go on FIRST, ahead of authentication, because
+         | the pages that need them most are the ones nobody is signed in for:
+         | the login screen reads the brand name and the maintenance page reads
+         | the operator's message (#110, #111).
+         |
+         | Maintenance comes straight after — before auth, so a closed platform
+         | does not first ask a shopkeeper to sign in and only then tell them it
+         | is shut (#160).
+         */
+        $middleware->appendToGroup('web', ApplyPlatformSettings::class);
+        $middleware->appendToGroup('web', EnforceMaintenanceMode::class);
+
         $middleware->alias([
             'tenant' => SetBusinessTenant::class,
             'subscription' => CheckSubscription::class,
@@ -47,6 +63,33 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->prependToPriorityList(
             SubstituteBindings::class,
             SetBusinessTenant::class,
+        );
+
+        /*
+         | ⚠️ MAINTENANCE HAS TO BEAT AUTHENTICATION, AND FOLLOW THE SESSION.
+         |
+         | Laravel sorts the stack by its priority list, and anything NOT in
+         | that list can be pushed behind everything that is. Left alone, a
+         | closed platform asked a shopkeeper to sign in and only then told them
+         | it was shut — and the maintenance check ran before StartSession, so
+         | the preview token could not be remembered.
+         |
+         | Anchoring both here fixes the order once for every route:
+         |   … StartSession → ApplyPlatformSettings → EnforceMaintenanceMode
+         |     → authentication → … (#110, #160)
+         |
+         | The anchor is the CONTRACT, `AuthenticatesRequests`, because that is
+         | what Laravel's own list names — the concrete `Authenticate` is not in
+         | it, so anchoring to that would silently do nothing.
+         */
+        $middleware->prependToPriorityList(
+            AuthenticatesRequests::class,
+            EnforceMaintenanceMode::class,
+        );
+
+        $middleware->prependToPriorityList(
+            EnforceMaintenanceMode::class,
+            ApplyPlatformSettings::class,
         );
 
         // Guard-aware auth redirects. The two panels (/admin super-admin vs

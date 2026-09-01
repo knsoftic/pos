@@ -75,6 +75,10 @@ class PosController extends Controller
             'session' => $this->cashSessions->currentFor($user->branch_id, $user->pos_counter_id),
             'requiresSession' => (bool) config('pos.require_cash_session', false),
             'paymentMethods' => (array) config('pos.payment_methods', []),
+
+            // The shop's own wallet or bank code, if they have uploaded one
+            // (#57). Shown full-screen at the till for a customer to scan.
+            'paymentQr' => config('pos.payment_qr_path'),
             'creditMethod' => (string) config('pos.credit_method', 'credit'),
             'cashMethods' => (array) config('pos.cash_methods', ['cash']),
             'rounding' => (float) config('pos.cash_rounding', 0),

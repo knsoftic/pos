@@ -207,6 +207,13 @@ class SettingRegistry
                 'type' => 'list',
                 'rules' => ['required', 'array', 'min:1'],
             ],
+            'pos.payment_qr_path' => [
+                'group' => 'payment',
+                'label' => 'Payment QR',
+                'type' => 'string',
+                'hidden' => true,
+                'rules' => ['nullable', 'string', 'max:255'],
+            ],
             'pos.cash_methods' => [
                 'group' => 'payment',
                 'label' => 'Which of those go in the drawer',

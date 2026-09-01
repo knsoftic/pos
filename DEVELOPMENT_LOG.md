@@ -16,7 +16,7 @@
 | **Environment** | Windows 11 + XAMPP (PHP + MySQL/MariaDB) |
 | **Start Date** | 2026-08-25 |
 | **Demo logins** | [LOGIN_CREDENTIALS.md](LOGIN_CREDENTIALS.md) — seeded accounts (dev only, #191) |
-| **Current Status** | 🔄 **Phase 11 chal raha hai (~60%)** — Session 1 mukammal: **dukaan ki apni settings** (`SettingRegistry` + `SettingsService` **config overlay**), currency/date/timezone formatting (#58, #153–157), tax rates (#59), discount ceiling (#60), receipt customisation + **QR** (#57). **Phases 0–10 mukammal.** **623 tests / 2,472 assertions pass**. ➡️ **Next: Phase 11 session 2** — SaaS branding (#111), super-admin settings (#110), notifications bell (#76), announcements (#77), maintenance mode (#160). |
+| **Current Status** | ✅ **Phase 11 MUKAMMAL (100%)** — Dukaan ki settings (#57–60, #153–157) **aur** SaaS operator ki settings: branding (#111), platform settings (#110), maintenance mode (#160), announcements (#77), notifications bell (#76). **Phases 0–11 mukammal.** **644 tests / 2,533 assertions pass**. Build + browser verified: 7 settings tabs, receipt QR, admin console ke settings/announcements, maintenance (503) jabke `/admin` khula. ➡️ **Next: Phase 12** (Public website + pricing + trial registration). |
 
 ---
 
@@ -47,18 +47,65 @@
 | **8** | Returns + Stock Adjustments + Transfers | ✅ Ho gaya | 100% |
 | **9** | Expenses + Profit & Loss | ✅ Ho gaya | 100% |
 | **10** | Reports | ✅ Ho gaya | 100% |
-| **11** | Settings + Receipt + QR + Barcode | 🔄 Chal raha hai | ~60% |
+| **11** | Settings + Receipt + QR + Barcode | ✅ Ho gaya | 100% |
 | **12** | Public Website + Pricing + Trial Registration | ⬜ Baqi | 0% |
 | **13** | Animations + UI Polish + Performance | ⬜ Baqi | 0% |
 | **14** | Security + Testing | 🔄 Chal raha hai | ~25% |
 | **15** | Deployment Preparation | ⬜ Baqi | 0% |
-| | **TOTAL PROGRESS** | 🟢 | **~83%** |
+| | **TOTAL PROGRESS** | 🟢 | **~87%** |
 
 ---
 
 ## 📝 Session Log (Kaam ki History)
 
 > Naya kaam upar add karo (newest first). Har entry mein: **date**, **kya hua**, **kya next hai**.
+
+
+### 2026-09-01 — Phase 11 MUKAMMAL ✅ (Session 2 — SaaS operator ki settings)
+
+Phase 11 ka doosra hissa: jo operator tay karta hai, dukaan nahi.
+
+**✅ JO HO GAYA:**
+
+**1) `platform_settings` — alag table, jaan boojh kar (#110)**
+- `settings` per business hai aur poochta hai "ye **dukaan** kaise chalti hai?". Ye poore installation ka hai: "ye **installation** kaise chalta hai?" — naam kya hai, koi sign up kar sakta hai ya nahi, band hai ya nahi.
+- Aik hi table mein nullable `business_id` ke saath rakhne ka matlab hota har tenant query mein `WHERE business_id = ? OR business_id IS NULL`, aur pehli jagah jo doosra hissa bhoolti wo ya to platform setting miss kar deti ya — kahin bura — **tenant ko wo likhne deti**.
+- Wahi usool: sirf jo badla hai wo store hota hai, aur `apply()` config ke upar chadhti hai. Middleware `web` group mein **sab se pehle** chalti hai kyunke jin pages ko sab se zyada zaroorat hai unme koi logged in hi nahi — login screen brand naam parhti hai, maintenance page operator ka message.
+- Table na mile to service **chup-chaap defaults pe** chalti hai: deployment naya code purani migration se pehle chalata hai, aur us khirki mein har page ka 500 hona defaults pe chalne se bura hai.
+
+**2) Branding — white-label ka waada, sabit (#111)**
+- 8 fields + logo upload. Uploaded logo drawn `<x-brand.mark>` ko replace karta hai; hata do to drawn mark wapas — wo **geometry** hai, image nahi, isi liye favicon, email aur chhape hue receipt sab jagah render hoti hai jahan file kabhi nahi pohanchti.
+- Test wahi cheez sabit karta hai jo maayne rakhti hai: teeno naam badlo → **login screen** badal jati hai aur "KN Softic" kahin nahi bachta. Ye sirf isi liye mumkin hai ke kisi Blade file ne kabhi company ka naam **literal** nahi likha (yehi `config/brand.php` ka poora maqsad hai).
+
+**3) Maintenance mode — `artisan down` NAHI (#160)**
+- Laravel ka maintenance poori application band karta hai, `/admin` samet — matlab operator usi screen se bahar ho jata hai jo isay wapas chalu karti. Aur wo aik server ki file hai, to do web servers wala platform **aadha** down hota hai.
+- Ye DB flag hai aur `/admin` jaan boojh kar khula rehta hai. Khula bhi: **logged-in super admin har jagah** (taake release check kar sake), **`?maintenance_token=…`** (session mein yaad rehta hai, warna har link pe query string dobara lagani parti), **`/up`** health check (planned window mein load balancer ka box nikal dena bilkul ghalat hai), aur **logout** (kisi ko aisi session mein qaid mat karo jo wo khatam na kar sake).
+- **503, 200 nahi** — 200 wala maintenance page cache aur index ho jata hai aur kaam khatam hone ke baad bhi serve hota rehta hai.
+- 🐞 **Sab se ahem bug isi mein mila:** Laravel apni **priority list** se stack sort karta hai, aur jo middleware us list mein nahi wo sab priority walon ke **peeche** dhakel di jati hai. Nateeja: `Authenticate` pehle chal rahi thi, to band platform pehle dukaandar se login maangta aur **phir** batata ke band hai. Saath hi maintenance `StartSession` se pehle chal rahi thi, to preview token yaad hi nahi rakha ja sakta tha. Ab dono priority list mein anchor hain: `… StartSession → ApplyPlatformSettings → EnforceMaintenanceMode → authentication → …`. Anchor **contract** (`AuthenticatesRequests`) hai, kyunke Laravel ki list wohi naam rakhti hai — concrete `Authenticate` pe anchor karna chup-chaap **kuch nahi** karta.
+
+**4) Bell mein do alag cheezein, ulti tarah se chalti hain (#76, #77)**
+- **ALERT aik HAALAT hai** — "6 shelves alert level se neeche", "subscription 4 din mein khatam". Live compute hoti hai aur dukaan ke theek karte hi **khud ghayab** ho jati hai. Isay **dismiss nahi kiya ja sakta**: jo alert sach hote hue chupayi ja sake wo jhoot hai, aur jo dukaandar seekh le ke badge bina kuch theek kiye chup karayi ja sakti hai wo **har** badge chup karana seekh leta hai.
+- **ANNOUNCEMENT aik PAIGHAAM hai** operator ki taraf se. Wo jhoot nahi hota, isi liye parh lene wale ko **hatana** aana chahiye — warna bell un cheezon se bhar jati hai jo wo pehle hi nipta chuka aur wo usay kholna chhor deta.
+- Isi liye **sirf announcements** ke paas dismissals table hai — aur wo **per shakhs** hai, per business nahi: malik ke parhne ka matlab cashier ne nahi parha.
+- **Alerts ke liye koi table nahi, koi queue nahi, koi cache nahi.** Stored alert ko haalat shuru hote hi banana aur khatam hote hi **mitana** parta hai — aur mitana wo hissa hai jo kabhi koi theek nahi karta, to dukaanon ki bell pichle mahine ke hal-shuda masail se bhar jati hai. Per request 4 counting queries hameshaa sach hoti hain.
+- Har alert **us screen ki permission** ke peeche hai jispe wo le jata hai: jo cashier inventory khol hi nahi sakta usay ye batana ke usme kya kam hai bekaar hai. Billing sirf malik ko.
+
+**5) Dukaan ka apna payment QR (#57)**
+- Upload, generate nahi: wallet kya encode karta hai ye **wallet** ka faisla hai — bank dukaan ko code deta hai aur dukaan wo dikhati hai. Khud banane ka matlab hota aik darjan mulki schemes ka andaza lagana aur zyadatar mein ghalat hona.
+- Till pe **full-screen** button, kyunke customer counter ke us paar phone pakre khara hai aur thumbnail scan nahi hoti.
+
+**⚠️ Tests — 21 naye, sab PASS**
+- `Settings/PlatformSettingsTest` (21): default config se · save **login screen tak** pohanchti hai · default ke barabar row nahi rakhti · ghalat value refuse · anjaan key refuse · admin screen save + reset · **sirf admins** (dukaan ka malik nahi) · logo upload/remove · **maintenance dukaanein band karti hai magar operator andar rehta hai** · logged-in operator dukaan tak pohanch sakta hai · preview token sirf sahi wala · **health check chalu rehta hai** · **503 + Retry-After** · announcement har dukaan tak + per-shakhs dismiss · window se bahar wala nahi dikhta · non-dismissible refuse karta hai · publish + end · ulti dates refuse · **alert silence nahi ho sakta** · bell sirf wo batati hai jo dekhne ka haq ho · sehatmand dukaan ki bell khali.
+- **Result: `php artisan test` → 644 tests / 2,533 assertions PASS**
+
+**✅ Browser verification**
+- Admin console: Settings (Branding/Sign-up/Maintenance) + Announcements — dono nav mein.
+- Maintenance ON kar ke: `/app/dashboard` → **503 "Back shortly"**, `/admin/login` → 200, `?maintenance_token=letmein` → 200, `/up` → 200.
+- Tenant bell: "2 batches expiring soon" (**koi Dismiss nahi**) aur "Scheduled maintenance this Sunday" (**Dismiss ke saath**).
+- Settings → Payment methods pe Payment QR upload card.
+
+➡️ **Next: Phase 12** — Public website + pricing + trial registration (#106–109, #172).
+
 
 
 ### 2026-09-01 — Phase 11 (Session 1) 🔄 — dukaan ki apni settings
@@ -1297,12 +1344,12 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 - [x] Discounts (fixed/percentage, product/invoice, permission) — #60 *(3 layers: plan → dukaan ki chhat → shakhs ka cap)*
 - [x] Timezone (store UTC, display local) — #154, #153
 - [x] Date formats + currency formatting + decimals — #155, #156, #157 *(`Format` + `money()`/`qty()`/`localDateTime()` helpers)*
-- [ ] Shop ka apna payment QR image (wallet/bank) — #57 *(receipt QR ban gaya; ye alag cheez hai)*
-- [ ] SaaS branding (dynamic app name/logo/favicon) — #111
-- [ ] Super Admin settings (SaaS name, trial, registration toggle, maintenance...) — #110
-- [ ] In-app notifications (bell) — #76
-- [ ] Super Admin announcements — #77
-- [ ] Maintenance mode — #160
+- [x] Shop ka apna payment QR image (wallet/bank) — #57 *(upload; till pe full-screen)*
+- [x] SaaS branding (dynamic app name/logo/favicon) — #111 *(`PlatformSettingRegistry`; logo upload drawn mark ko replace karta hai)*
+- [x] Super Admin settings (SaaS name, trial, registration toggle, maintenance...) — #110
+- [x] In-app notifications (bell) — #76 *(alerts = conditions, announcements = messages)*
+- [x] Super Admin announcements — #77 *(dates ke saath; per-person dismissal)*
+- [x] Maintenance mode — #160 *(`/admin` khula rehta hai — `artisan down` nahi)*
 
 ---
 

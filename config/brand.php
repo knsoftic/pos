@@ -29,6 +29,17 @@ return [
 
     'name' => env('BRAND_NAME', 'KN Softic'),
 
+    /*
+    | An uploaded mark, for a white-label deployment (#111). Null means the
+    | drawn <x-brand.mark> is used, which is the better default: it is geometry
+    | rather than an image, so it renders identically in a favicon, an email, a
+    | printed receipt and a page that never reached the font or the file store.
+    |
+    | Set from /admin/settings, not from .env, because a white-label operator
+    | should not need a deployment to change their own logo.
+    */
+    'logo_path' => env('BRAND_LOGO_PATH'),
+
     // Used where a formal entity is required — invoices, terms, legal footers.
     'legal_name' => env('BRAND_LEGAL_NAME', 'KN Softic'),
 

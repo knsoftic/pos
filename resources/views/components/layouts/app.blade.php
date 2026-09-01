@@ -233,11 +233,76 @@
                     <x-icon name="sun" class="hidden h-5 w-5 dark:block" />
                 </button>
 
-                {{-- Notifications --}}
-                <button class="btn-ghost relative p-2" aria-label="Notifications">
-                    <x-icon name="bell" />
-                    <span class="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900"></span>
-                </button>
+                {{-- ─────────────────────── the bell (#76, #77) ─────────────────────
+                     Two kinds of thing live in here and behave in opposite ways:
+                     an ALERT is a condition and clears itself when the shop fixes
+                     it; an ANNOUNCEMENT is a message and can be put away. See
+                     TenantNotificationService for why only one of them is
+                     dismissible. The dot is drawn only when there is something —
+                     a badge that is always lit is a badge nobody looks at. --}}
+                @php
+                    $notifications = app(\App\Services\TenantNotificationService::class);
+                    $notices = $notifications->all();
+                @endphp
+
+                <div class="relative" x-data="{ open: false }">
+                    <button @click="open = ! open" class="btn-ghost relative p-2" aria-label="Notifications">
+                        <x-icon name="bell" />
+                        @if ($notices !== [])
+                            <span class="absolute right-1.5 top-1.5 h-2 w-2 rounded-full ring-2 ring-white dark:ring-slate-900
+                                         {{ $notifications->hasUrgent() ? 'bg-rose-500' : 'bg-amber-500' }}"></span>
+                        @endif
+                    </button>
+
+                    <div x-show="open" x-cloak @click.outside="open = false"
+                         class="card absolute right-0 z-30 mt-2 w-80 overflow-hidden p-0 sm:w-96">
+                        <div class="border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+                            <p class="text-sm font-semibold text-slate-900 dark:text-white">Notifications</p>
+                            <p class="text-xs text-slate-400">
+                                {{ $notices === [] ? 'Nothing needs you right now.' : count($notices).' to look at' }}
+                            </p>
+                        </div>
+
+                        <div class="max-h-96 divide-y divide-slate-100 overflow-y-auto dark:divide-slate-800">
+                            @forelse (array_slice($notices, 0, 6) as $notice)
+                                <div class="flex items-start gap-3 px-4 py-3">
+                                    <span class="mt-1.5 h-2 w-2 shrink-0 rounded-full
+                                        {{ ['danger' => 'bg-rose-500', 'warning' => 'bg-amber-500'][$notice['level']] ?? 'bg-brand-500' }}"></span>
+
+                                    <div class="min-w-0 flex-1">
+                                        @if ($notice['href'])
+                                            <a href="{{ $notice['href'] }}" class="block text-sm font-medium text-slate-900 hover:text-brand-700 dark:text-white dark:hover:text-brand-300">
+                                                {{ $notice['title'] }}
+                                            </a>
+                                        @else
+                                            <p class="text-sm font-medium text-slate-900 dark:text-white">{{ $notice['title'] }}</p>
+                                        @endif
+                                        <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{{ $notice['body'] }}</p>
+                                    </div>
+
+                                    @if ($notice['dismissible'] ?? false)
+                                        <form method="POST" action="{{ route('app.notifications.dismiss', $notice['id']) }}">
+                                            @csrf
+                                            <button type="submit" class="rounded p-1 text-slate-300 hover:text-slate-600 dark:hover:text-slate-300"
+                                                    title="Dismiss">
+                                                <x-icon name="x" class="h-3.5 w-3.5" />
+                                            </button>
+                                        </form>
+                                    @endif
+                                </div>
+                            @empty
+                                <p class="px-4 py-8 text-center text-sm text-slate-400">All clear.</p>
+                            @endforelse
+                        </div>
+
+                        @if (count($notices) > 6)
+                            <a href="{{ route('app.notifications.index') }}"
+                               class="block border-t border-slate-100 px-4 py-2.5 text-center text-sm font-medium text-brand-600 hover:bg-slate-50 dark:border-slate-800 dark:text-brand-400 dark:hover:bg-slate-800/50">
+                                See all {{ count($notices) }}
+                            </a>
+                        @endif
+                    </div>
+                </div>
 
                 {{-- User menu --}}
                 <div class="relative pl-1" x-data="{ open: false }">

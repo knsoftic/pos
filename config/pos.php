@@ -73,6 +73,18 @@ return [
     'credit_method' => env('POS_CREDIT_METHOD', 'credit'),
 
     /*
+    | The shop's OWN payment QR — their wallet or bank code, shown to a customer
+    | to scan (#57). Not the same thing as the receipt QR, which encodes a sale
+    | that has already happened; this one is how the money arrives.
+    |
+    | An image rather than generated, because what a wallet encodes is decided
+    | by the wallet: a bank hands the shop a code and the shop shows it. Trying
+    | to generate one would mean guessing at a dozen national schemes and being
+    | wrong about most of them.
+    */
+    'payment_qr_path' => env('POS_PAYMENT_QR_PATH'),
+
+    /*
     |--------------------------------------------------------------------------
     | Rounding
     |--------------------------------------------------------------------------

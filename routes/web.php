@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AnnouncementController;
 use App\Http\Controllers\Admin\BusinessController;
 use App\Http\Controllers\Admin\BusinessNoteController;
 use App\Http\Controllers\Admin\BusinessOverrideController;
@@ -7,6 +8,7 @@ use App\Http\Controllers\Admin\BusinessSubscriptionController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\ImpersonationController;
 use App\Http\Controllers\Admin\PlanController;
+use App\Http\Controllers\Admin\PlatformSettingsController;
 use App\Http\Controllers\Admin\SystemNotificationController;
 use App\Http\Controllers\App\BarcodeLabelController;
 use App\Http\Controllers\App\BillingController;
@@ -20,6 +22,7 @@ use App\Http\Controllers\App\EmployeeController;
 use App\Http\Controllers\App\ExpenseCategoryController;
 use App\Http\Controllers\App\ExpenseController;
 use App\Http\Controllers\App\InventoryController;
+use App\Http\Controllers\App\NotificationController;
 use App\Http\Controllers\App\OtherIncomeController;
 use App\Http\Controllers\App\PosController;
 use App\Http\Controllers\App\PosCounterController;
@@ -514,6 +517,17 @@ Route::middleware('tenant.app')
         });
 
         /*
+        | ---- the bell (#76, #77) ---------------------------------------------
+        | No feature gate and no permission: every employee should be told the
+        | platform is going down on Sunday. What the bell CONTAINS is filtered
+        | per person inside the service — a cashier who cannot open the
+        | inventory is not told what is low in it.
+        */
+        Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
+        Route::post('notifications/{announcement}/dismiss', [NotificationController::class, 'dismiss'])
+            ->name('notifications.dismiss');
+
+        /*
         | ---- settings (#57–#60, #153–#157) -----------------------------------
         | One permission for the lot. Splitting "may change the receipt" from
         | "may change the discount ceiling" would invent a dozen permissions
@@ -525,6 +539,7 @@ Route::middleware('tenant.app')
             Route::get('settings/{group}', [SettingsController::class, 'show'])->name('settings.show');
 
             Route::put('settings/business', [SettingsController::class, 'updateBusiness'])->name('settings.business');
+            Route::put('settings/payment-qr', [SettingsController::class, 'updatePaymentQr'])->name('settings.payment-qr');
             Route::put('settings/{group}', [SettingsController::class, 'update'])->name('settings.update');
             Route::post('settings/{group}/reset', [SettingsController::class, 'reset'])->name('settings.reset');
 
@@ -615,6 +630,24 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('subscriptions', [BusinessSubscriptionController::class, 'index'])->name('subscriptions.index');
 
         // ---------------------------------------------- system alerts (#179)
+        // ---------------------------------------- announcements (#77)
+        Route::get('announcements', [AnnouncementController::class, 'index'])->name('announcements.index');
+        Route::post('announcements', [AnnouncementController::class, 'store'])->name('announcements.store');
+        Route::put('announcements/{announcement}', [AnnouncementController::class, 'update'])->name('announcements.update');
+        Route::delete('announcements/{announcement}', [AnnouncementController::class, 'destroy'])->name('announcements.destroy');
+
+        /*
+        | -------------------------------- platform settings (#110, #111, #160)
+        | ⚠️ These routes must stay reachable during maintenance mode — they
+        | are how it gets turned off. EnforceMaintenanceMode lets every
+        | /admin path through for exactly that reason.
+        */
+        Route::get('settings', [PlatformSettingsController::class, 'index'])->name('settings.index');
+        Route::get('settings/{group}', [PlatformSettingsController::class, 'show'])->name('settings.show');
+        Route::put('settings/logo', [PlatformSettingsController::class, 'updateLogo'])->name('settings.logo');
+        Route::put('settings/{group}', [PlatformSettingsController::class, 'update'])->name('settings.update');
+        Route::post('settings/{group}/reset', [PlatformSettingsController::class, 'reset'])->name('settings.reset');
+
         Route::get('notifications', [SystemNotificationController::class, 'index'])->name('notifications.index');
         Route::post('notifications/reconcile', [SystemNotificationController::class, 'reconcile'])->name('notifications.reconcile');
     });
