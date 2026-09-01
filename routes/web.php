@@ -28,6 +28,7 @@ use App\Http\Controllers\App\ProductImportController;
 use App\Http\Controllers\App\ProfitLossController;
 use App\Http\Controllers\App\PurchaseController;
 use App\Http\Controllers\App\PurchaseReturnController;
+use App\Http\Controllers\App\ReportController;
 use App\Http\Controllers\App\RoleController;
 use App\Http\Controllers\App\SaleController;
 use App\Http\Controllers\App\SaleReturnController;
@@ -486,6 +487,29 @@ Route::middleware('tenant.app')
         Route::get('reports/profit-loss', [ProfitLossController::class, 'index'])
             ->middleware(['feature:accounting.profit_loss', 'permission:reports.view_profit'])
             ->name('reports.profit-loss');
+
+        /*
+        | ---- the reports module (#54, #55, #56) ------------------------------
+        | ⚠️ Registered AFTER `reports/profit-loss` on purpose: `{report}`
+        | matches anything without a slash, so the literal route has to be
+        | declared first or the P&L would resolve as a report key.
+        |
+        | The gates here are the WEAKEST any report needs — the section itself.
+        | Each report carries its own feature and permission and both are
+        | checked per report in the controller (#187), because a route-level
+        | gate would have to be the strictest of thirty and nobody would see
+        | anything.
+        */
+        Route::middleware(['feature:reports.basic', 'permission:reports.view'])->group(function () {
+            Route::get('reports', [ReportController::class, 'index'])->name('reports.index');
+            Route::get('reports/{report}', [ReportController::class, 'show'])->name('reports.show');
+
+            // Taking figures OUT of the system is its own authority: an export
+            // leaves with the person who made it and outlives their account.
+            Route::get('reports/{report}/export/{format}', [ReportController::class, 'export'])
+                ->middleware('permission:reports.export')
+                ->name('reports.export');
+        });
 
         // ---- employees (#50) -----------------------------------------------
         Route::get('employees', [EmployeeController::class, 'index'])

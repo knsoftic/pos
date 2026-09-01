@@ -55,7 +55,7 @@
         ['label' => 'Expenses',     'icon' => 'expenses',    'route' => 'app.expenses.index', 'feature' => FeatureRegistry::ACCOUNTING_EXPENSES, 'permission' => PermissionRegistry::EXPENSES_VIEW],
         ['label' => 'Other income', 'icon' => 'trending-up', 'route' => 'app.income.index', 'feature' => FeatureRegistry::ACCOUNTING_EXPENSES, 'permission' => PermissionRegistry::EXPENSES_VIEW],
         ['label' => 'Profit & Loss','icon' => 'reports',     'route' => 'app.reports.profit-loss', 'feature' => FeatureRegistry::ACCOUNTING_PROFIT_LOSS, 'permission' => PermissionRegistry::REPORTS_VIEW_PROFIT],
-        ['label' => 'Reports',      'icon' => 'reports',     'route' => null, 'feature' => FeatureRegistry::REPORTS_BASIC, 'permission' => PermissionRegistry::REPORTS_VIEW],
+        ['label' => 'Reports',      'icon' => 'reports',     'route' => 'app.reports.index', 'feature' => FeatureRegistry::REPORTS_BASIC, 'permission' => PermissionRegistry::REPORTS_VIEW],
         ['label' => 'Employees',    'icon' => 'employees',   'route' => 'app.employees.index', 'feature' => FeatureRegistry::TEAM_MULTI_USER, 'permission' => PermissionRegistry::EMPLOYEES_VIEW],
         ['label' => 'Roles',        'icon' => 'shield',      'route' => 'app.roles.index',     'feature' => FeatureRegistry::TEAM_ROLES, 'permission' => PermissionRegistry::ROLES_MANAGE],
         ['label' => 'Branches',     'icon' => 'branches',    'route' => 'app.branches.index',  'feature' => null, 'permission' => PermissionRegistry::BRANCHES_VIEW],

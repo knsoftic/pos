@@ -16,7 +16,7 @@
 | **Environment** | Windows 11 + XAMPP (PHP + MySQL/MariaDB) |
 | **Start Date** | 2026-08-25 |
 | **Demo logins** | [LOGIN_CREDENTIALS.md](LOGIN_CREDENTIALS.md) — seeded accounts (dev only, #191) |
-| **Current Status** | ✅ **Phase 9 MUKAMMAL (100%)** — Expenses (#43), other income (#44), `ProfitService` + P&L statement (#45, #135, #183). **Phases 0–9 mukammal.** **570 tests / 1,880 assertions pass** (MySQL `pos_saas_test`). Build + browser verified: category banai, EXP-000001 (25,000 rent) + INC-000001 (1,800 scrap), aur poora P&L — revenue 1,190 → COGS 935.95 → gross 254.05 → net −22,945.95, day-by-day chart ke saath. ➡️ **Next: Phase 10** (Reports). |
+| **Current Status** | ✅ **Phase 10 MUKAMMAL (100%)** — **30 reports** aik registry pe (`ReportRegistry` + `ReportService`), filters (#55), aur export system CSV / **hand-written .xlsx** / PDF (#56). **Phases 0–10 mukammal.** **599 tests / 2,395 assertions pass** (MySQL `pos_saas_test`). Build + browser verified: catalogue, sales summary (chart + khali din + totals 1,590 → 1,190 net), profit by product, stock valuation (45,040.99, variants ke naam ke saath). ➡️ **Next: Phase 11** (Settings + Receipt + QR + Barcode). |
 
 ---
 
@@ -46,19 +46,71 @@
 | **7** | POS + Sales + Payments + Customer Ledger | ✅ Ho gaya | 100% |
 | **8** | Returns + Stock Adjustments + Transfers | ✅ Ho gaya | 100% |
 | **9** | Expenses + Profit & Loss | ✅ Ho gaya | 100% |
-| **10** | Reports | ⬜ Baqi | 0% |
+| **10** | Reports | ✅ Ho gaya | 100% |
 | **11** | Settings + Receipt + QR + Barcode | ⬜ Baqi | 0% |
 | **12** | Public Website + Pricing + Trial Registration | ⬜ Baqi | 0% |
 | **13** | Animations + UI Polish + Performance | ⬜ Baqi | 0% |
 | **14** | Security + Testing | 🔄 Chal raha hai | ~25% |
 | **15** | Deployment Preparation | ⬜ Baqi | 0% |
-| | **TOTAL PROGRESS** | 🟢 | **~75%** |
+| | **TOTAL PROGRESS** | 🟢 | **~80%** |
 
 ---
 
 ## 📝 Session Log (Kaam ki History)
 
 > Naya kaam upar add karo (newest first). Har entry mein: **date**, **kya hua**, **kya next hai**.
+
+
+### 2026-09-01 — Phase 10 MUKAMMAL ✅ (30 reports + filters + export system)
+
+Poora reports module. Sab se bara faisla shuru mein hi hua: **30 controllers nahi**.
+
+**✅ JO HO GAYA:**
+
+**1) Aik registry, aik service, aik screen (#54, #183)**
+- `ReportRegistry` mein har report **khud ko declare** karti hai: naam, group, kaun sa **plan feature**, kaun si **permission**, aur uske liye kaun se **filters** maayne rakhte hain.
+- 30 alag controllers likhne ka matlab hota: yeh chaar baatein 30 files mein bikhri hui, aur 31-wi report 29-wi se copy hoti — yehi wo raasta hai jis se "sales by branch" report chup-chaap branch filter **ignore** karne lagti hai.
+- `ReportService::build()` har report ke liye **aik hi shakl** wapas karti hai: columns, rows, totals, meta. Isi wajah se aik screen, aik CSV writer, aik spreadsheet writer aur aik PDF template **teeso ko** serve karte hain — aur nayi report aik query hai, aik feature nahi.
+- Test isay pin karta hai: **har declared report waqai build hoti hai**. Catalogue mein aisi entry jiske peeche query na ho, wo customer ke liye rakha hua 500 hai.
+
+**2) Accuracy hi poora maqsad hai (#134)**
+Teen usool aik jagah lagte hain, 30 dafa yaad nahi rakhne parte:
+- **Sirf completed sales.** Held sale hui hi nahi, voided undo ho chuki — dono mein se koi bhi takings mein aa jaye to report us paise ki baat kar rahi hoti hai jo dukaan ke paas kabhi tha hi nahi.
+- **Returns ghataye jate hain, chhupaye nahi.** Har sales/profit figure returns ka net hai, **aur** returns apna alag column rakhte hain — taake adjustment **nazar aaye**.
+- **Tax revenue nahi.** Wahi usool jo P&L ka hai, warna "sales by product" ka jama P&L ki kamai se **zyada** nikalta.
+
+**3) Rounding ke bare mein aik usool — aur aik iqrar**
+- 🐞 Browser verification mein pakra: P&L keh raha tha COGS **935.95**, profit report **935.96**. Wajah: rounding **associative nahi** hai. 1043.4822 − 107.5258 aik dafa round karo to 935.96, pehle round karo to 935.95.
+- **Usool:** paisa banane ke liye pehle round karo, **phir** jama/tafreeq karo — theek usi tarteeb se jaise `ProfitService` karti hai. Isi se statement aur report aik number dikhate hain, **aur** P&L screen pe khud jama karke check karo to sahi baithti hai.
+- **Iqrar:** product/category wali **breakdown** har row pe round hoti hai, to uska column document total se aik-do paise hat sakta hai. Ye bug nahi aur isay row chhair kar "theek" nahi karna: har row apni jagah durust hai, aur aisa total jo apne hi upar wali rows se ikhtelaf kare wo is se bura hai. Test dono baatein pin karta hai — summary **bilkul** milti hai, breakdown **0.02 ke andar**.
+- Saath hi per-line cost ab `ROUND(qty × cost, 4)` se jamta hai — theek waise jaise sale ne khud store kiya tha.
+
+**4) Export system — chaar shakal, teen gate (#56)**
+- **CSV har plan ke saath**, kyunke jo report system se bahar na aa sake usay check bhi nahi kiya ja sakta. **BOM** ke saath, warna Excel har non-ASCII naam ko mojibake bana deta hai aur ilzaam export pe aata hai. Numbers **bina comma** — "1,200.00" wala cell spreadsheet mein jama nahi hota.
+- **.xlsx khud likha** (~150 lines, ZipArchive se). Asli spreadsheet aik ZIP hai jis mein chand XML parts hain; library laane ka matlab tha kai MB aur aik build step, sirf aik file format ke liye. Is codebase ki adat wahi hai — **choti cheez khud likho** (dekho `Ean13`). Numbers asli **numbers** jate hain, sortable aur summable.
+- **PDF** — `barryvdh/laravel-dompdf` (is phase mein add hui **waahid** dependency). Template jaan boojh kar plain HTML + inline CSS hai: dompdf app ki Tailwind stylesheet nahi parh sakta, "shared" stylesheet wahan **bilkul unstyled** column ban jata. 5 se zyada columns ho to **landscape**, warna kata hua total milta — jo bilkul export na hone se bura hai.
+- **Print** ko kuch nahi chahiye, wo bas page hai.
+
+**5) Gates har report pe, route pe nahi (#187)**
+- Route sirf wo maangta hai jo **sab se kamzor** report ko chahiye. Har report apna feature aur apni permission le kar chalti hai aur dono **usi report ke liye** controller mein check hote hain — warna route-level gate ko 30 mein se sab se sakht hona parta aur kisi ko kuch nazar na aata.
+- Catalogue sirf wo dikhata hai jo is plan aur is role ke liye **khul** sakta hai. Grey rows advert hoti hain, menu nahi — upgrade billing page pe bikta hai.
+- **Export apni alag permission** hai: file banane wale ke saath jati hai aur uske account se zyada zinda rehti hai.
+- 🐞 Yahan bhi aik bug nikla: `reports.export` permission `reports.export_pdf` **feature** se bandhi hui thi. Matlab jis dukaan ke plan mein PDF nahi, uska **CSV bhi band** — malik ke liye bhi, kyunke malik roles se upar hai magar **subscription se nahi**. Ab wo `reports.basic` se bandhi hai: sawal "ye shakhs figures bahar le ja sakta hai?" ka file format se koi taalluq nahi.
+
+**⚠️ Tests — 29 naye, sab PASS**
+- `Reporting/ReportTest` (29): **har declared report build hoti hai** · anjaan report 404 · held/voided kisi takings figure mein nahi · returns ghatte hain **aur dikhte** hain · **reports aur P&L paise tak milte hain** · tax revenue nahi · sirf restocked return cost wapas karta hai · khali din rehte hain · month grouping · **split payment dono methods mein** · stock reports shelf abhi ka parhti hain · ledger ko customer chahiye · ledger closing balance jama nahi hota · branch filter narrow karta hai aur ghair-mutalliqa branch **refuse** · **jo filter report ne maanga hi nahi wo ignore** · ulti date range · CSV (BOM + title + bina format numbers) · **.xlsx asli ZIP hai** · PDF asli PDF · paid formats plan ke saath, CSV nahi · anjaan format 404 · catalogue sirf khulne wali reports · role se bahar report URL se bhi refuse · plan se bahar report billing pe · export apni permission · screen render · cross-tenant · expense reports P&L se milti hain · expense reports ko `expenses.view` bhi chahiye.
+- **Result: `php artisan test` → 599 tests / 2,395 assertions PASS**
+
+**✅ Browser verification**
+- Catalogue: 6 groups, 30 cards, P&L statement ka button upar.
+- `sales.summary`: chart + **khali din bhi rows** + totals (3 sales · 1,590 takings · 400 returns · **1,190 net**) — P&L se bilkul milta hua.
+- `profit.by_product`: 1,190 revenue · 935.96 cost · 254.04 gross · 21.3% margin.
+- `inventory.valuation`: **koi date range nahi** ("As at ..."), total 45,040.99.
+- 🐞 Yahan aik aur pakra: teen "Cotton T-Shirt" rows bilkul aik jaisi dikh rahi thin (variants). Ab row ka naam variant ke saath — "Cotton T-Shirt — L / White". Jis row pe reorder karna hai wo pehchani jani chahiye.
+- Mobile 375px: horizontal scroll nahi.
+
+➡️ **Next: Phase 11** — Settings + Receipt + QR + Barcode (#57–60, #76–77, #110–111, #154–160).
+
 
 
 ### 2026-09-01 — Phase 9 MUKAMMAL ✅ (expenses + other income + Profit & Loss)
@@ -1165,16 +1217,16 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 ## PHASE 10 — Reports
 *(Spec ref: #54–56, #134, #183)*
 
-- [ ] Sales reports (daily/monthly/yearly/product/category/customer/employee/branch/POS/payment) — #54
-- [ ] Profit reports (daily/product/category/branch/monthly/P&L) — #54
-- [ ] Inventory reports (stock/value/low/out/movement/adjustment/expiry/transfer) — #54
-- [ ] Purchase reports (purchase/supplier/return/outstanding) — #54
-- [ ] Customer reports (purchases/outstanding/ledger) — #54
-- [ ] Expense reports (daily/category/branch/monthly) — #54
-- [ ] Report filters (date presets + branch/employee/customer/etc.) — #55
-- [ ] Export system (PDF/Excel/CSV/Print, plan-based) — #56
-- [ ] Reports accuracy (cancelled excluded, returns adjusted) — #134
-- [ ] `ReportService` (optimized queries) — #183
+- [x] Sales reports (daily/monthly/yearly/product/category/customer/employee/branch/POS/payment) — #54 *(8 reports; daily/monthly/yearly aik `interval` filter se)*
+- [x] Profit reports (daily/product/category/branch/monthly/P&L) — #54 *(4 + Phase 9 ka P&L statement)*
+- [x] Inventory reports (stock/value/low/out/movement/adjustment/expiry/transfer) — #54 *(8)*
+- [x] Purchase reports (purchase/supplier/return/outstanding) — #54 *(4)*
+- [x] Customer reports (purchases/outstanding/ledger) — #54 *(3)*
+- [x] Expense reports (daily/category/branch/monthly) — #54 *(3)*
+- [x] Report filters (date presets + branch/employee/customer/etc.) — #55 *(har report khud batati hai kaun se filters uske liye maayne rakhte hain)*
+- [x] Export system (PDF/Excel/CSV/Print, plan-based) — #56 *(CSV muft, .xlsx **khud likha**, PDF dompdf)*
+- [x] Reports accuracy (cancelled excluded, returns adjusted) — #134 *(aik jagah, `salesQuery()` mein)*
+- [x] `ReportService` (optimized queries) — #183 *(sab kuch SQL aggregate)*
 
 ---
 

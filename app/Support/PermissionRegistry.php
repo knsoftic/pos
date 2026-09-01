@@ -463,9 +463,18 @@ final class PermissionRegistry
             self::REPORTS_EXPORT => [
                 'name' => 'Export reports',
                 'group' => 'reports',
-                'description' => 'Download report data as PDF or Excel — it leaves the system.',
+                'description' => 'Download report data — it leaves the system and outlives the account.',
                 'sensitive' => true,
-                'feature' => FeatureRegistry::REPORTS_EXPORT_PDF,
+                /*
+                | ⚠️ Tied to `reports.basic`, NOT to a file format. This
+                | permission answers "may this person take figures out of the
+                | system?", which has nothing to do with whether the plan sells
+                | PDF or Excel. Hanging it on `reports.export_pdf` made CSV —
+                | which every plan gets — unreachable for a shop without the
+                | PDF add-on, including its owner, since an owner outranks
+                | roles but never the subscription.
+                */
+                'feature' => FeatureRegistry::REPORTS_BASIC,
             ],
 
             // ------------------------------------------------ administration

@@ -157,10 +157,15 @@ class ProfitService
         // Only the lines that went back on the shelf. The join is expressed
         // through the relation so `sale_returns` keeps its tenant and branch
         // scopes — a raw join would quietly cross tenants.
+        //
+        // ⚠️ ROUND per line, because that is how the documents themselves store
+        // cost (4 decimals a line). Multiplying at full precision and rounding
+        // once at the end drifts by a penny, and a penny of disagreement
+        // between this statement and a report is enough to discredit both.
         $restocked = round((float) SaleReturnItem::query()
             ->where('restock', true)
             ->whereHas('saleReturn', fn (Builder $q) => $this->applyReturnFilters($q, $period, $branchId))
-            ->sum(DB::raw('quantity * unit_cost')), 2);
+            ->sum(DB::raw('ROUND(quantity * unit_cost, 4)')), 2);
 
         // Cost that came back damaged: still the shop's, still spent. Shown so
         // that breakage has somewhere to be seen rather than silently sitting
@@ -266,7 +271,7 @@ class ProfitService
             ->whereHas('saleReturn', fn (Builder $q) => $this->applyReturnFilters($q, $period, $branchId))
             ->join('sale_returns', 'sale_returns.id', '=', 'sale_return_items.sale_return_id')
             ->groupBy('sale_returns.return_date')
-            ->selectRaw('sale_returns.return_date as d, COALESCE(SUM(sale_return_items.quantity * sale_return_items.unit_cost), 0) as cost')
+            ->selectRaw('sale_returns.return_date as d, COALESCE(SUM(ROUND(sale_return_items.quantity * sale_return_items.unit_cost, 4)), 0) as cost')
             ->get()
             ->keyBy(fn ($r) => (string) $r->d);
 
