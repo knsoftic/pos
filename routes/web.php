@@ -32,8 +32,10 @@ use App\Http\Controllers\App\ReportController;
 use App\Http\Controllers\App\RoleController;
 use App\Http\Controllers\App\SaleController;
 use App\Http\Controllers\App\SaleReturnController;
+use App\Http\Controllers\App\SettingsController;
 use App\Http\Controllers\App\StockTransferController;
 use App\Http\Controllers\App\SupplierController;
+use App\Http\Controllers\App\TaxRateController;
 use App\Http\Controllers\App\UnitController;
 use App\Http\Controllers\Auth\AdminLoginController;
 use App\Http\Controllers\Auth\BusinessLoginController;
@@ -509,6 +511,30 @@ Route::middleware('tenant.app')
             Route::get('reports/{report}/export/{format}', [ReportController::class, 'export'])
                 ->middleware('permission:reports.export')
                 ->name('reports.export');
+        });
+
+        /*
+        | ---- settings (#57–#60, #153–#157) -----------------------------------
+        | One permission for the lot. Splitting "may change the receipt" from
+        | "may change the discount ceiling" would invent a dozen permissions
+        | that every shop would grant together anyway — and `settings.manage` is
+        | already marked sensitive, which is the honest signal.
+        */
+        Route::middleware('permission:settings.manage')->group(function () {
+            Route::get('settings', [SettingsController::class, 'index'])->name('settings.index');
+            Route::get('settings/{group}', [SettingsController::class, 'show'])->name('settings.show');
+
+            Route::put('settings/business', [SettingsController::class, 'updateBusiness'])->name('settings.business');
+            Route::put('settings/{group}', [SettingsController::class, 'update'])->name('settings.update');
+            Route::post('settings/{group}/reset', [SettingsController::class, 'reset'])->name('settings.reset');
+
+            // Tax rates are a list rather than a knob, so they get their own
+            // routes under the same permission (#59).
+            Route::middleware('feature:sales.tax')->group(function () {
+                Route::post('tax-rates', [TaxRateController::class, 'store'])->name('tax-rates.store');
+                Route::put('tax-rates/{taxRate}', [TaxRateController::class, 'update'])->name('tax-rates.update');
+                Route::delete('tax-rates/{taxRate}', [TaxRateController::class, 'destroy'])->name('tax-rates.destroy');
+            });
         });
 
         // ---- employees (#50) -----------------------------------------------

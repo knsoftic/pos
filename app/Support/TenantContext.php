@@ -3,12 +3,14 @@
 namespace App\Support;
 
 use App\Models\Business;
+use App\Models\Concerns\BelongsToTenant;
+use App\Services\SettingsService;
 
 /**
  * Holds the "current business" for the lifetime of a request (bound as a
  * singleton). This is the SINGLE SOURCE OF TRUTH for tenancy:
  *
- *   - When a business is set, every model using {@see \App\Models\Concerns\BelongsToTenant}
+ *   - When a business is set, every model using {@see BelongsToTenant}
  *     is automatically filtered to that business_id AND has its business_id
  *     stamped on create.
  *   - When NO business is set (super-admin panel, console, queued jobs, and the
@@ -52,6 +54,7 @@ class TenantContext
      * previous context afterwards. Useful for jobs / cross-tenant admin tasks.
      *
      * @template T
+     *
      * @param  callable():T  $callback
      * @return T
      */
@@ -60,10 +63,24 @@ class TenantContext
         $previous = $this->business;
         $this->business = $business;
 
+        /*
+        | Settings are overlaid onto the config repository, which is
+        | process-wide, so crossing into another business has to re-overlay —
+        | and restoring the tenant afterwards has to restore its config too.
+        | Without this, a job that touched a second shop would leave the first
+        | one running on the second one's currency and rounding (#57).
+        */
+        $settings = app(SettingsService::class);
+        $settings->apply($business);
+
         try {
             return $callback();
         } finally {
             $this->business = $previous;
+
+            $previous === null
+                ? $settings->apply(null)
+                : $settings->apply($previous);
         }
     }
 }

@@ -16,7 +16,7 @@
 | **Environment** | Windows 11 + XAMPP (PHP + MySQL/MariaDB) |
 | **Start Date** | 2026-08-25 |
 | **Demo logins** | [LOGIN_CREDENTIALS.md](LOGIN_CREDENTIALS.md) — seeded accounts (dev only, #191) |
-| **Current Status** | ✅ **Phase 10 MUKAMMAL (100%)** — **30 reports** aik registry pe (`ReportRegistry` + `ReportService`), filters (#55), aur export system CSV / **hand-written .xlsx** / PDF (#56). **Phases 0–10 mukammal.** **599 tests / 2,395 assertions pass** (MySQL `pos_saas_test`). Build + browser verified: catalogue, sales summary (chart + khali din + totals 1,590 → 1,190 net), profit by product, stock valuation (45,040.99, variants ke naam ke saath). ➡️ **Next: Phase 11** (Settings + Receipt + QR + Barcode). |
+| **Current Status** | 🔄 **Phase 11 chal raha hai (~60%)** — Session 1 mukammal: **dukaan ki apni settings** (`SettingRegistry` + `SettingsService` **config overlay**), currency/date/timezone formatting (#58, #153–157), tax rates (#59), discount ceiling (#60), receipt customisation + **QR** (#57). **Phases 0–10 mukammal.** **623 tests / 2,472 assertions pass**. ➡️ **Next: Phase 11 session 2** — SaaS branding (#111), super-admin settings (#110), notifications bell (#76), announcements (#77), maintenance mode (#160). |
 
 ---
 
@@ -47,18 +47,72 @@
 | **8** | Returns + Stock Adjustments + Transfers | ✅ Ho gaya | 100% |
 | **9** | Expenses + Profit & Loss | ✅ Ho gaya | 100% |
 | **10** | Reports | ✅ Ho gaya | 100% |
-| **11** | Settings + Receipt + QR + Barcode | ⬜ Baqi | 0% |
+| **11** | Settings + Receipt + QR + Barcode | 🔄 Chal raha hai | ~60% |
 | **12** | Public Website + Pricing + Trial Registration | ⬜ Baqi | 0% |
 | **13** | Animations + UI Polish + Performance | ⬜ Baqi | 0% |
 | **14** | Security + Testing | 🔄 Chal raha hai | ~25% |
 | **15** | Deployment Preparation | ⬜ Baqi | 0% |
-| | **TOTAL PROGRESS** | 🟢 | **~80%** |
+| | **TOTAL PROGRESS** | 🟢 | **~83%** |
 
 ---
 
 ## 📝 Session Log (Kaam ki History)
 
 > Naya kaam upar add karo (newest first). Har entry mein: **date**, **kya hua**, **kya next hai**.
+
+
+### 2026-09-01 — Phase 11 (Session 1) 🔄 — dukaan ki apni settings
+
+Phase 11 ke do hisse hain: **dukaan ki settings** aur **SaaS operator ki settings**. Ye session pehla hissa hai.
+
+**✅ JO HO GAYA:**
+
+**1) Sab se bara faisla: settings config ke UPAR chadhti hain (#57, #190)**
+- Har setting ki key **wohi config key hai** jise wo override karti hai. `pos.cash_rounding` ki setting `config('pos.cash_rounding')` ko badal deti hai.
+- Tenant middleware tenant set hote hi `SettingsService::apply()` chalata hai — **us line ke baad** sale engine, till, receipt aur reports sab **is dukaan ka** jawab dekhte hain, aur unmein se kisi ko pata bhi nahi ke settings ki koi table hai.
+- Doosra raasta — har jagah `setting()` helper — ka matlab hota har us file ko chhoona jo koi knob parhti hai, aur do tareeqe jinme se aik ghalat. Har us jagah aik bug hota jahan koi switch karna bhool gaya.
+- **Test isay pin karta hai us tarah jo maayne rakhta hai:** cash rounding badlo → asli sale ka total badal jata hai. Jis setting pe koi amal na kare wo sajawat hai.
+
+**2) Sirf jo BADLA hai wo store hota hai**
+- Jo setting chhui hi nahi gayi uski koi row nahi; wo `config/` ke peeche chalti rehti hai. Isi liye behtar default baad mein bhi har us dukaan tak pohanchta hai jisne usay kabhi haath nahi lagaya.
+- Default ke barabar value **row hi mita deti hai** — "wapas standard pe" asli cheez hai, dikhawa nahi.
+- 🐞 Yahan aik zaroori bug pakra: "default" live config se parha ja raha tha — magar `apply()` config **pehle hi** dukaan ke jawab se bhar chuki hoti hai. Matlab dukaan kabhi standard pe wapas ja hi nahi sakti thi, aur usi process ka agla tenant wo value **wirasat** mein le leta. Ab boot pe **snapshot** liya jata hai, kisi bhi tenant se pehle.
+- 🐞 Doosra: `forget()` row to hata deta tha magar overlay dobara nahi lagata tha — usi request mein aage koi knob parhne wala **mit chuki** setting pe amal karta.
+
+**3) Settings aik dukaan se doosri mein LEAK nahi hotin**
+- Config poore process ki hai, isi liye ye is phase ka sab se ahem test hai: dusri dukaan ko **shipped defaults** milne chahiye, aur wapis aane pe pehli ko apni value. `TenantContext::runFor` bhi ab overlay lagata aur bahaal karta hai.
+
+**4) Waqt UTC mein store, local mein dikhta (#153, #154)**
+- Har timestamp UTC. Business ka `timezone` sirf **dikhane** ke waqt lagta hai. Test: wahi instant UTC mein 06:30, Asia/Karachi mein 11:30, aur **stored row bilkul nahi hilti**.
+- `Format` class + `money()` / `qty()` / `localDateTime()` helpers — currency, separators, decimals, date/time sab dukaan ke hisaab se (#155–157).
+
+**5) Tax rates: table, magar product NUMBER rakhta hai (#59)**
+- `tax_rates` wo **naam wali list** hai jisme se log chunte hain. Product aur sale line rate ko **number** ki tarah snapshot karte hain.
+- Agar rate sirf table mein hota aur sale relation se parhta, to jis din VAT 17% se 18% hoti, **har purani invoice khud ko chup-chaap badal deti**. Test: rate delete karo — bechi hui line par 17% hi rehta hai.
+- "Bilkul aik default" transaction hai, constraint nahi — constraint us lamhe ko mana kar deta jab purana default hat chuka aur naya laga nahi.
+
+**6) Discount ki teen tehen (#60, #141)**
+- Plan (`sales.discounts`) → **dukaan ki chhat** (`sales.max_discount_percent`) → **shakhs ka cap** (`users.max_discount_percent`).
+- Jis shakhs ka apna cap nahi, wo ab **dukaan ki chhat** pe girta hai, "unlimited" pe nahi — warna chhat barhana har till ko be-hisaab ikhtiyar de deta, jo chhat ka ulta maqsad hai.
+
+**7) Receipt ab dukaan ki apni (#57) + QR**
+- Upar ki line, tax number, logo, tax breakdown, footer, auto-print — sab settings. Paisa aur tareekh `Format` se.
+- **QR mein link nahi, khud invoice ke facts hain** (dukaan, invoice no, date, total, tax). Teen wajah: dukaan ka internet uska sab se kamzor hissa hai aur QR tab hi paranha jata hai jab jhagra ho raha ho; receipt deployment se zyada zinda rehti hai aur link mar jata hai; aur kai tax authorities khud details maangti hain, redirect nahi.
+- SVG, PNG nahi: wahi template 203 dpi thermal aur 600 dpi laser dono pe chhapta hai; raster aik pe theek to doosri pe unscannable. QR banane mein kabhi exception nahi phenkta — sale ho chuki hai aur customer khara hai.
+
+**⚠️ Tests — 24 naye, sab PASS**
+- `Settings/SettingsTest` (24): default config se aata hai · save config overlay karti hai · default ke barabar value row nahi rakhti · group reset · **setting sale engine tak pohanchti hai** · **tenants ke darmiyan leak nahi** · `runFor` config wapas karti hai · ghalat value refuse aur kuch likha nahi jata · anjaan key refuse · plan se bahar setting na dikhti na post ho sakti · permission · business details + logo replace · anjaan timezone refuse · **timezone display badalta hai, storage nahi** · date format · tax rates + bilkul aik default · off hone pe default nahi reh sakta · 100% se upar refuse · duplicate naam · **rate delete karne se sale nahi badalti** · discount cap dukaan ki chhat pe girta hai · receipt settings + QR · receipt ka paisa dukaan ke format mein.
+- 🐞 Aik purana test toota aur wo **theek toota**: `SalesBookTest` request se pehle `config()` poke karta tha. Ab middleware har request pe overlay lagata hai, to poked config mit jati hai — yehi to guarantee hai. Test ab asli setting likhta hai.
+- **Result: `php artisan test` → 623 tests / 2,472 assertions PASS**
+
+**✅ Browser verification**
+- Settings ke 7 tabs; Business tab (timezone Asia/Karachi), Currency & formats (live preview), Sales tab, Tax rates (Standard 17% add hua).
+- Receipt: "Fresh every day" header · "Tax No: NTN 1234567-8" · date **11:26 (Karachi)** jabke UTC 06:26 · **QR** + "Scan to check this receipt" · do line ka footer · total `Rs 800.00`.
+
+**⬜ Phase 11 mein ab baqi (session 2):** SaaS branding (#111) · super-admin settings (#110) · notifications bell (#76) · announcements (#77) · maintenance mode (#160) · dukaan ka apna payment QR image.
+
+➡️ **Next: Phase 11 session 2** — SaaS operator ki settings.
+
 
 
 ### 2026-09-01 — Phase 10 MUKAMMAL ✅ (30 reports + filters + export system)
@@ -1233,16 +1287,17 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 ## PHASE 11 — Settings + Receipt + QR + Barcode
 *(Spec ref: #57–60, #76–77, #110–111, #154–160)*
 
-- [ ] Business settings — General — #57
-- [ ] Business settings — Sales — #57
-- [ ] Business settings — Inventory — #57
-- [ ] Business settings — Receipt — #57
-- [ ] Business settings — Payment (custom methods + QR) — #57
-- [ ] Currency management — #58
-- [ ] Taxes (multiple rates, product/invoice level) — #59
-- [ ] Discounts (fixed/percentage, product/invoice, permission) — #60
-- [ ] Timezone (store UTC, display local) — #154, #153
-- [ ] Date formats + currency formatting + decimals — #155, #156, #157
+- [x] Business settings — General — #57 *(business record khud: naam, pata, logo, timezone)*
+- [x] Business settings — Sales — #57 *(invoice numbering, cash rounding, hold expiry, discounts)*
+- [x] Business settings — Inventory — #57
+- [x] Business settings — Receipt — #57 *(header, footer, tax number, logo, tax breakdown, **QR**, auto-print)*
+- [x] Business settings — Payment (custom methods) — #57 *(methods + kaun se daraz mein jate hain)*
+- [x] Currency management — #58 *(code, symbol, position, decimals, separators)*
+- [x] Taxes (multiple rates, product/invoice level) — #59 *(`tax_rates` — naam wali list; product number snapshot karta hai)*
+- [x] Discounts (fixed/percentage, product/invoice, permission) — #60 *(3 layers: plan → dukaan ki chhat → shakhs ka cap)*
+- [x] Timezone (store UTC, display local) — #154, #153
+- [x] Date formats + currency formatting + decimals — #155, #156, #157 *(`Format` + `money()`/`qty()`/`localDateTime()` helpers)*
+- [ ] Shop ka apna payment QR image (wallet/bank) — #57 *(receipt QR ban gaya; ye alag cheez hai)*
 - [ ] SaaS branding (dynamic app name/logo/favicon) — #111
 - [ ] Super Admin settings (SaaS name, trial, registration toggle, maintenance...) — #110
 - [ ] In-app notifications (bell) — #76

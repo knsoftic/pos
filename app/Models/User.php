@@ -97,9 +97,22 @@ class User extends Authenticatable
             return null;
         }
 
-        return $this->max_discount_percent === null
-            ? null
-            : (float) $this->max_discount_percent;
+        if ($this->max_discount_percent !== null) {
+            return (float) $this->max_discount_percent;
+        }
+
+        /*
+        | No personal cap falls back to the SHOP's ceiling (#60), not to
+        | "unlimited". Otherwise raising the shop-wide limit — or simply never
+        | setting a cashier's own — would quietly hand every till unlimited
+        | discretion, which is the opposite of what a ceiling is for.
+        |
+        | 100 means the shop has not set one either, and that is the only case
+        | where the answer is genuinely "no limit".
+        */
+        $shopCap = (float) config('sales.max_discount_percent', 100);
+
+        return $shopCap >= 100 ? null : $shopCap;
     }
 
     /** May this person approve a discount of the given percentage? (#141) */

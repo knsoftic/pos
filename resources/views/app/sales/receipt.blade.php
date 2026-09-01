@@ -127,7 +127,21 @@
 
         {{-- ─────────────────────────── who ─────────────────────────── --}}
         <div class="center">
+            @if ($showLogo)
+                <img src="{{ Storage::disk(config('uploads.products.disk'))->url($business->logo_path) }}"
+                     alt="{{ $business->name }}"
+                     style="max-height:56px; max-width:70%; margin:0 auto 6px; display:block" />
+            @endif
+
+            @if ($header !== '')
+                <p class="muted" style="margin:0 0 2px; white-space:pre-line">{{ $header }}</p>
+            @endif
+
             <p class="bold big" style="margin:0">{{ $business?->name ?? config('brand.product') }}</p>
+
+            @if ($taxNumber !== '')
+                <p class="muted" style="margin:2px 0 0">Tax No: {{ $taxNumber }}</p>
+            @endif
             @if ($sale->branch)
                 <p class="muted" style="margin:2px 0 0">{{ $sale->branch->name }}</p>
                 @if ($sale->branch->address)
@@ -153,7 +167,7 @@
             </tr>
             <tr>
                 <td class="muted">Date</td>
-                <td class="right">{{ $sale->sold_at?->format('d M Y, H:i') }}</td>
+                <td class="right">{{ localDateTime($sale->sold_at) }}</td>
             </tr>
             <tr>
                 <td class="muted">Customer</td>
@@ -186,13 +200,13 @@
                             {{ $item->description }}
                             @if ((float) $item->discount_amount > 0)
                                 <br><span class="muted" style="font-size:.9em">
-                                    less {{ number_format((float) $item->discount_amount, 2) }} discount
+                                    less {{ money($item->discount_amount) }} discount
                                 </span>
                             @endif
                         </td>
-                        <td class="num">{{ rtrim(rtrim(number_format((float) $item->quantity, 4), '0'), '.') }}</td>
-                        <td class="num">{{ number_format((float) $item->unit_price, 2) }}</td>
-                        <td class="num">{{ number_format($item->net(), 2) }}</td>
+                        <td class="num">{{ qty($item->quantity) }}</td>
+                        <td class="num">{{ money($item->unit_price) }}</td>
+                        <td class="num">{{ money($item->net()) }}</td>
                     </tr>
                 @endforeach
             </tbody>
@@ -204,20 +218,20 @@
         <table class="totals">
             <tr>
                 <td class="muted">Subtotal</td>
-                <td class="num">{{ number_format((float) $sale->subtotal, 2) }}</td>
+                <td class="num">{{ money($sale->subtotal) }}</td>
             </tr>
 
             @if ((float) $sale->discount_total > 0)
                 <tr>
                     <td class="muted">Discount</td>
-                    <td class="num">−{{ number_format((float) $sale->discount_total, 2) }}</td>
+                    <td class="num">−{{ money($sale->discount_total) }}</td>
                 </tr>
             @endif
 
             @if ($showTax && (float) $sale->tax_total > 0)
                 <tr>
                     <td class="muted">Tax</td>
-                    <td class="num">{{ number_format((float) $sale->tax_total, 2) }}</td>
+                    <td class="num">{{ money($sale->tax_total) }}</td>
                 </tr>
             @endif
 
@@ -225,13 +239,13 @@
                 {{-- Shown rather than buried, so the receipt adds up on paper. --}}
                 <tr>
                     <td class="muted">Rounding</td>
-                    <td class="num">{{ (float) $sale->rounding > 0 ? '+' : '−' }}{{ number_format(abs((float) $sale->rounding), 2) }}</td>
+                    <td class="num">{{ (float) $sale->rounding > 0 ? '+' : '−' }}{{ money(abs((float) $sale->rounding)) }}</td>
                 </tr>
             @endif
 
             <tr class="grand">
                 <td>TOTAL</td>
-                <td class="num">{{ number_format((float) $sale->total, 2) }}</td>
+                <td class="num">{{ money($sale->total, true) }}</td>
             </tr>
         </table>
 
@@ -247,24 +261,33 @@
                             <span style="font-size:.9em">· {{ $payment->reference }}</span>
                         @endif
                     </td>
-                    <td class="num">{{ number_format((float) $payment->amount, 2) }}</td>
+                    <td class="num">{{ money($payment->amount) }}</td>
                 </tr>
             @endforeach
 
             @if ((float) $sale->change_given > 0)
                 <tr>
                     <td class="muted">Change</td>
-                    <td class="num">{{ number_format((float) $sale->change_given, 2) }}</td>
+                    <td class="num">{{ money($sale->change_given) }}</td>
                 </tr>
             @endif
 
             @if ((float) $sale->due_amount > 0)
                 <tr>
                     <td class="bold">On account</td>
-                    <td class="num bold">{{ number_format((float) $sale->due_amount, 2) }}</td>
+                    <td class="num bold">{{ money($sale->due_amount) }}</td>
                 </tr>
             @endif
         </table>
+
+        {{-- ──────────────────────────── the QR ─────────────────────── --}}
+        @if ($qr)
+            <hr class="rule">
+            <div class="center" style="margin:6px 0">
+                {!! $qr !!}
+                <p class="muted" style="margin:3px 0 0; font-size:.8em">Scan to check this receipt</p>
+            </div>
+        @endif
 
         {{-- ─────────────────────────── footer (#144) ───────────────── --}}
         @if ($footer !== '')

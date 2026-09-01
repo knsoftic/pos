@@ -8,7 +8,10 @@ use App\Models\Branch;
 use App\Models\Sale;
 use App\Models\User;
 use App\Services\SaleService;
+use App\Support\Format;
 use App\Support\PermissionRegistry;
+use App\Support\Qr;
+use App\Support\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -126,12 +129,35 @@ class SaleController extends Controller
 
         $sale->load(['items', 'payments', 'customer', 'branch', 'seller:id,name']);
 
+        $business = app(TenantContext::class)->business();
+
         return view('app.sales.receipt', [
             'sale' => $sale,
             'width' => $width,
+            'header' => (string) config('pos.receipt.header', ''),
             'footer' => (string) config('pos.receipt.footer', ''),
+            'taxNumber' => (string) config('pos.receipt.tax_number', ''),
             'showTax' => (bool) config('pos.receipt.show_tax_breakdown', true),
-            'autoPrint' => $request->boolean('auto'),
+            'showLogo' => (bool) config('pos.receipt.show_logo', false) && filled($business?->logo_path),
+
+            /*
+            | The QR carries the invoice itself, not a link to it (#154–#160) —
+            | see App\Support\Qr for why. Built here rather than in the view so
+            | the template never has to think about failure.
+            */
+            'qr' => (bool) config('pos.receipt.show_qr', false)
+                ? Qr::svg(Qr::receiptContent([
+                    'Shop' => $business?->name,
+                    'Invoice' => $sale->invoice_no,
+                    'Date' => Format::dateTime($sale->sold_at),
+                    'Total' => Format::money($sale->total, true),
+                    'Tax' => (float) $sale->tax_total > 0 ? Format::money($sale->tax_total, true) : null,
+                    'Tax No' => config('pos.receipt.tax_number') ?: null,
+                ]), $width === '58mm' ? 96 : 120)
+                : null,
+
+            // The shop can ask for this always; the till also asks per print.
+            'autoPrint' => $request->boolean('auto') || (bool) config('pos.receipt.auto_print', false),
         ]);
     }
 

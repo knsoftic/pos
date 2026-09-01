@@ -107,8 +107,29 @@ return [
     */
     'receipt' => [
         'width' => env('POS_RECEIPT_WIDTH', '80mm'),
+
+        // Optional line above the shop name — a slogan, a branch note.
+        'header' => env('POS_RECEIPT_HEADER'),
+
         'footer' => env('POS_RECEIPT_FOOTER', 'Thank you for shopping with us.'),
+
+        // Printed under the shop name where the law asks for it (#57).
+        'tax_number' => env('POS_RECEIPT_TAX_NUMBER'),
+
+        'show_logo' => (bool) env('POS_RECEIPT_SHOW_LOGO', false),
         'show_tax_breakdown' => (bool) env('POS_RECEIPT_SHOW_TAX', true),
+
+        /*
+         | A QR carrying the invoice number, date and total (#154–#160). It is
+         | not a link: a receipt has to stay checkable when the shop's internet
+         | is down and when the customer is standing in a different country, so
+         | the code carries the FACTS rather than a URL that has to resolve.
+         */
+        'show_qr' => (bool) env('POS_RECEIPT_SHOW_QR', false),
+
+        // Opening the print dialog by itself is a courtesy on a till and an
+        // ambush anywhere else, so it is off until a shop asks for it.
+        'auto_print' => (bool) env('POS_RECEIPT_AUTO_PRINT', false),
     ],
 
 ];

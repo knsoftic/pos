@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\SettingsService;
 use App\Support\BranchContext;
 use App\Support\TenantContext;
 use Closure;
@@ -25,6 +26,7 @@ class SetBusinessTenant
     public function __construct(
         protected TenantContext $tenant,
         protected BranchContext $branch,
+        protected SettingsService $settings,
     ) {}
 
     public function handle(Request $request, Closure $next): Response
@@ -58,6 +60,18 @@ class SetBusinessTenant
         }
 
         $this->tenant->setBusiness($business);
+
+        /*
+        | The shop's own settings are overlaid onto the config repository right
+        | here (#57). From this line on, `config('pos.cash_rounding')` and every
+        | other knob return THIS business's answer, so the sale engine, the
+        | till, the receipt and the reports all follow the shop without a single
+        | one of them knowing a settings table exists.
+        |
+        | It has to happen after the tenant is set and before anything reads a
+        | knob, which is why it lives in the middleware and not in a provider.
+        */
+        $this->settings->apply($business);
 
         // Which branches this person may reach (#48, #138). Same rule as the
         // tenant: derived from the authenticated user, never from the request,

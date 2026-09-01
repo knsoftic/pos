@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\FeatureService;
 use App\Services\PermissionService;
 use App\Services\PlanLimitService;
+use App\Services\SettingsService;
 use App\Support\BranchContext;
 use App\Support\PermissionRegistry;
 use App\Support\TenantContext;
@@ -44,6 +45,7 @@ class AppServiceProvider extends ServiceProvider
          */
         $this->app->scoped(FeatureService::class);
         $this->app->scoped(PlanLimitService::class);
+        $this->app->scoped(SettingsService::class);
     }
 
     /**
@@ -51,6 +53,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        /*
+        | Take a copy of what the config FILES say, before any request overlays
+        | a shop's own settings onto them (#57). Without this snapshot, "back to
+        | default" would have nothing to compare against — see SettingsService.
+        */
+        SettingsService::snapshotDefaults();
+
         $this->configurePasswordPolicy();
         $this->registerPermissionGates();
 

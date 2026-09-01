@@ -61,7 +61,7 @@
         ['label' => 'Branches',     'icon' => 'branches',    'route' => 'app.branches.index',  'feature' => null, 'permission' => PermissionRegistry::BRANCHES_VIEW],
         ['label' => 'POS Counters', 'icon' => 'counter',     'route' => 'app.counters.index',  'feature' => FeatureRegistry::POS_TERMINAL, 'permission' => PermissionRegistry::POS_COUNTERS_MANAGE],
         ['label' => 'Billing',      'icon' => 'credit-card', 'route' => 'app.billing.index',   'feature' => null, 'permission' => null],
-        ['label' => 'Settings',     'icon' => 'settings',    'route' => null, 'feature' => null, 'permission' => PermissionRegistry::SETTINGS_MANAGE],
+        ['label' => 'Settings',     'icon' => 'settings',    'route' => 'app.settings.index', 'feature' => null, 'permission' => PermissionRegistry::SETTINGS_MANAGE],
     ];
 
     $nav = array_values(array_filter($nav, function ($item) use ($layoutFeatures, $user) {

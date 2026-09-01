@@ -20,6 +20,7 @@ use App\Services\InventoryService;
 use App\Services\OrganizationProvisioner;
 use App\Services\ProductService;
 use App\Services\SaleService;
+use App\Services\SettingsService;
 use App\Support\BranchContext;
 use App\Support\FeatureRegistry;
 use App\Support\LimitRegistry;
@@ -302,7 +303,17 @@ class SalesBookTest extends TestCase
     {
         $this->setUpBusiness();
         $this->actingAs($this->owner);
-        config(['pos.receipt.footer' => 'Exchanges within 7 days with this receipt.']);
+
+        /*
+        | ⚠️ Set the SETTING, not the config. From Phase 11 the tenant
+        | middleware overlays the shop's settings onto config at the start of
+        | every request, so a `config()` poked in a test is overwritten before
+        | the controller ever reads it — which is exactly the guarantee the
+        | overlay exists to give (#57).
+        */
+        app(SettingsService::class)->put([
+            'pos.receipt.footer' => 'Exchanges within 7 days with this receipt.',
+        ]);
 
         $sale = $this->sell($this->stocked(), 1);
 
