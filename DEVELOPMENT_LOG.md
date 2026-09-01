@@ -16,7 +16,7 @@
 | **Environment** | Windows 11 + XAMPP (PHP + MySQL/MariaDB) |
 | **Start Date** | 2026-08-25 |
 | **Demo logins** | [LOGIN_CREDENTIALS.md](LOGIN_CREDENTIALS.md) — seeded accounts (dev only, #191) |
-| **Current Status** | ✅ **Phase 12 MUKAMMAL (100%)** — Public marketing site (8 pages), pricing **jo asli plans se banti hai** (#108), aur self-service sign-up trial ke saath (#109). **Phases 0–12 mukammal.** **663 tests / 2,621 assertions pass**. Build + browser verified: home, pricing (cycle toggle), feature pages, mobile 375px. ➡️ **Next: Phase 13** (Animations + UI polish + performance). |
+| **Current Status** | 🔄 **Phase 13 chal raha hai (~65%)** — Session 1 (jo nazar aata hai): asli **owner dashboard** (#12) quick actions (#123) + activity feed (#124), **global search** (#75), toasts (#165/#166), **Light/Dark/System** theme (#74), breadcrumbs (#164), motion + reduced-motion (#73). **Phases 0–12 mukammal.** **679 tests / 2,664 assertions pass**. ➡️ **Next: Phase 13 session 2** — onboarding wizard (#86), confirm dialogs (#92), caching (#96/#168), query audit (#97/#167), queue (#171), scheduler (#169/#170). |
 
 ---
 
@@ -49,16 +49,66 @@
 | **10** | Reports | ✅ Ho gaya | 100% |
 | **11** | Settings + Receipt + QR + Barcode | ✅ Ho gaya | 100% |
 | **12** | Public Website + Pricing + Trial Registration | ✅ Ho gaya | 100% |
-| **13** | Animations + UI Polish + Performance | ⬜ Baqi | 0% |
+| **13** | Animations + UI Polish + Performance | 🔄 Chal raha hai | ~65% |
 | **14** | Security + Testing | 🔄 Chal raha hai | ~25% |
 | **15** | Deployment Preparation | ⬜ Baqi | 0% |
-| | **TOTAL PROGRESS** | 🟢 | **~90%** |
+| | **TOTAL PROGRESS** | 🟢 | **~92%** |
 
 ---
 
 ## 📝 Session Log (Kaam ki History)
 
 > Naya kaam upar add karo (newest first). Har entry mein: **date**, **kya hua**, **kya next hai**.
+
+
+### 2026-09-01 — Phase 13 (Session 1) 🔄 — jo nazar aata hai
+
+Phase 13 ke do hisse: **jo user dekhta hai** aur **jo nazar nahi aata** (caching, queue, scheduler). Ye pehla hissa.
+
+**✅ JO HO GAYA:**
+
+**1) Asli dashboard (#12, #123, #124)**
+- Ab tak dashboard jaan boojh kar khali tha — "card tab aayega jab uske peeche ka module asli ho jaye". Ab har module asli hai, to dashboard bhi asli hona chahiye.
+- **`DashboardService` apna koi figure nahi ginta.** Revenue wohi hai jo `ProfitService` ka hai, low stock wohi jo `InventoryService` ka. Jo dashboard apni linked report se ikhtelaf kare wo **na hone se bura** hai: malik ke paas do number ho jate hain aur chunne ka koi tareeqa nahi. Test dono ko barabar pin karta hai.
+- **Jo card dekhne ka haq nahi wo GAYAB hai, zero nahi.** Cashier ko gross profit pe "0" dikhana aisa jhoot hai jo wo aage suna sakta hai; asli number dikhana leak hai. Null aata hai, card banta hi nahi.
+- **Quick actions (#123)** permission **aur** plan dono se filter — jo button dabane pe mana kare wo na hone se bura hai.
+- **Activity feed (#124)** har source ki apni permission ke peeche, aur `sales.view` vs `sales.view_all` ka wohi narrowing jo sales book karta hai — query mein, chhupa kar nahi.
+- **"Getting set up" list**: nayi dukaan ko batati hai aage kya karna hai, har step hote hi tick hota hai, aur **sab hote hi list ghayab** ho jati hai — roz khulne wali screen pe ticks ka checklist sirf kachra hai.
+
+**2) Global search (#75)**
+- Har source apni screen ki **wohi permission** ke peeche. Jo search box chup-chaap us module ki rows de de jo banda khol hi nahi sakta, wo **khush-akhlaq leak** hai. Test: sirf POS wale cashier ko "Secret Product" aur "Secret Customer" dono nahi milte.
+- **Koi leading wildcard nahi.** `%term%` index use nahi kar sakta, to har search full scan ban jati hai — demo pe theek, 40,000 products wali dukaan pe bekaar, aur wahi dukaan hai jise search sab se zyada chahiye. Naam prefix se, barcode **exact** (uska unique index hai).
+- Har keystroke pichli request **abort** karta hai, warna tez type karne wale ko wo results milte hain jo sab se aakhir mein pohanche — aksar us prefix ke jo wo mita chuka.
+
+**3) Theme: Light / Dark / System (#74)**
+- **Teen states, do nahi.** "System" asli chunao hai, chunao ki ghair-mojudgi nahi: jiska phone shaam ko switch hota hai wo yehi tawaqqo karta hai, aur do-tarfa toggle usay wahin jama deta hai jahan aakhri baar tap kiya tha. OS badle to hum bhi badalte hain — magar sirf jab chunao "system" ho.
+- Plan feature (`ui.dark_mode`) ke peeche; feature band ho to picker **banta hi nahi** — murda control logon ko sikhata hai ke controls kaam nahi karte.
+
+**4) Toasts (#165, #166) — aur jo toast NAHI banna chahiye**
+- **Success aik iqrar hai**: "save ho gaya". Banda pehle se jaanta hai usne kya kiya; usay aadhe second ki tasdeeq chahiye aur phir apni screen. To wo **toast** hai jo khud chala jata hai.
+- **Baqi sab inline rehta hai aur waheen rehta hai.** Validation summary jo parhte parhte gaayab ho jaye wo sarasar dushmani hai, aur plan limit ko faisla chahiye, nazar nahi. **Khud mit jane wala error wo paighaam hai jise miss karne ki daawat di ja rahi ho.**
+
+**5) Breadcrumbs (#164) aur motion (#73)**
+- Breadcrumb **active nav item se derive** hota hai, har screen pe declare nahi. 60 screens apna apna trail pass karte to 60 jagah ghalti ki gunjaish hoti, aur jo pehli bhool jata wo chup-chaap kuch na dikhata.
+- Motion: teen duration tokens (150/200/300ms) aik jagah. Aur **`prefers-reduced-motion` globally honoured** — ye zauq nahi, accessibility setting hai: jise screen pe harkat se migraine ya matli hoti hai wohi isay set karta hai, aur jo aik animation reh gayi wohi usay bimar karti hai.
+
+**🐞 Aik naya gotcha pakra (aur log mein likha ja raha hai):**
+- **Component ke attribute mein Blade directive compile nahi hoti.** `<x-icon x-show="choice === @js($value)" />` mein `@js()` **literal** reh jata hai — tag pe `choice === @js($value)` likha aata hai aur Alpine kabhi match nahi karta (theme picker mein teeno options pe tick lag raha tha). Hal: `:x-show="'choice === '.json_encode($value)"` — component attribute pe `:` PHP evaluate karta hai. Ye wahi khandan hai jismein `title="Billing &amp; plan"` wala bug tha.
+
+**⚠️ Tests — 16 naye, sab PASS**
+- `Dashboard/DashboardTest` (16): **dashboard aur reports aik number** · return takings se ghatta hai · **jo card dekhne ka haq nahi wo gayab, zero nahi** · plan band ho to profit card nahi · period filter · bohat lamba range refuse nahi hota, **cap** hota hai · quick actions sirf wo jo ho sakte hain · activity feed `view_all` ka ehtram karta hai · setup list khud khatam hoti hai · screen render · search: naam/SKU/**barcode exact** · customers + invoices · **back door nahi** · chhota term ignore · **cross-tenant nahi** · endpoint grouped JSON.
+- **Result: `php artisan test` → 679 tests / 2,664 assertions PASS**
+
+**✅ Browser verification**
+- Dashboard: quick actions, 5 cards (Today 3,510 · Gross profit 937.02 · Needs reordering 0 · Owed to you 9,260 · Spent 25,000), chart, activity feed, team.
+- Search: "Cola" pe PRODUCTS → Cola 500ml + SKU.
+- Theme: Light/Dark/System — sirf mojooda chunao pe tick; dark mode poore workspace pe.
+- Breadcrumb: "Dashboard / Reports / Sales summary".
+
+**⬜ Phase 13 mein baqi (session 2 — jo nazar nahi aata):** onboarding wizard (#86) · styled confirm dialogs (#92) · caching + invalidation (#96/#168) · large data / N+1 audit (#97/#167) · queue-ready heavy actions (#171) · scheduler tasks (#169/#170).
+
+➡️ **Next: Phase 13 session 2.**
+
 
 
 ### 2026-09-01 — Phase 12 MUKAMMAL ✅ (public website + pricing + sign-up)
@@ -1408,20 +1458,20 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 *(Spec ref: #71–75, #86–88, #92, #96–97, #120–124, #163–171, #199)*
 
 ### UI/UX
-- [ ] Modern SaaS UI (clean sidebar/topbar/cards, professional) — #72, #120, #199
-- [ ] Soft animations (150–300ms, non-blocking) — #73
-- [ ] Light/Dark/System mode (plan-based, saved) — #74
-- [ ] Global search (product/customer/supplier/invoice) — #75
-- [ ] Onboarding wizard (6 steps) — #86
-- [ ] Empty states — #87
-- [ ] Confirmation dialogs (delete/cancel/return/suspend) — #92
-- [ ] Dashboard quick actions — #123
-- [ ] Recent activity widgets — #124
-- [ ] Responsive design (desktop-first, mobile-friendly) — #71, #163
-- [ ] Breadcrumbs — #164
-- [ ] Toast success/error messages — #165, #166
-- [ ] Business Owner dashboard (cards + graphs + filters) — #12
-- [ ] Plan-based navigation (feature-hidden menus) — #13, #125
+- [x] Modern SaaS UI (clean sidebar/topbar/cards, professional) — #72, #120, #199 *(phases 1–12 mein banta raha, har phase pe browser-verified)*
+- [x] Soft animations (150–300ms, non-blocking) — #73 *(motion tokens + **`prefers-reduced-motion` globally honoured**)*
+- [x] Light/Dark/System mode (plan-based, saved) — #74 *(teen states, OS follow karta hai, `ui.dark_mode` ke peeche)*
+- [x] Global search (product/customer/supplier/invoice) — #75 *(har source apni permission ke peeche; prefix match, koi leading wildcard nahi)*
+- [ ] Onboarding wizard (6 steps) — #86 *(dashboard pe setup checklist ban gayi; wizard baqi)*
+- [x] Empty states — #87 *(har list ka apna; plus naye tenant ke liye "getting set up" list jo khud khatam ho jati hai)*
+- [ ] Confirmation dialogs (delete/cancel/return/suspend) — #92 *(abhi native `confirm()`; styled component baqi)*
+- [x] Dashboard quick actions — #123
+- [x] Recent activity widgets — #124
+- [x] Responsive design (desktop-first, mobile-friendly) — #71, #163
+- [x] Breadcrumbs — #164 *(active nav se **derive** hote hain, har screen pe declare nahi)*
+- [x] Toast success/error messages — #165, #166 *(success **toast**, baqi sab inline — neeche wajah)*
+- [x] Business Owner dashboard (cards + graphs + filters) — #12
+- [x] Plan-based navigation (feature-hidden menus) — #13, #125 *(Phase 3 se; nav feature + permission dono se filter hota hai)*
 
 ### Performance
 - [ ] Caching (plan features, settings, categories, permissions) + invalidation — #96, #168

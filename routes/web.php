@@ -35,6 +35,7 @@ use App\Http\Controllers\App\ReportController;
 use App\Http\Controllers\App\RoleController;
 use App\Http\Controllers\App\SaleController;
 use App\Http\Controllers\App\SaleReturnController;
+use App\Http\Controllers\App\SearchController;
 use App\Http\Controllers\App\SettingsController;
 use App\Http\Controllers\App\StockTransferController;
 use App\Http\Controllers\App\SupplierController;
@@ -476,6 +477,15 @@ Route::middleware('tenant.app')
                 Route::post('suppliers/{supplier}/adjustments', [SupplierController::class, 'adjustment'])->name('suppliers.adjustments');
             });
         });
+
+        /*
+        | ---- global search (#75) ---------------------------------------------
+        | No feature or permission gate on the ROUTE: what it may return is
+        | decided per source inside the service, against the same permission
+        | that guards each module's own screen. A route-level gate would have to
+        | be the strictest of five and would silence the box for most people.
+        */
+        Route::get('search', SearchController::class)->name('search');
 
         // ---- expenses & other income (#43, #44) -----------------------------
         Route::middleware('feature:accounting.expenses')->group(function () {

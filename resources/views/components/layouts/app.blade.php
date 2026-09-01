@@ -41,6 +41,10 @@
      | This is presentation only. Every one of these routes carries its own
      | `permission:` middleware; hiding a link is a courtesy, not a guard.
      */
+    // #74: dark mode is a plan feature, so the picker is only drawn where the
+    // plan actually includes it.
+    $darkModeAllowed = ($layoutFeatures[FeatureRegistry::UI_DARK_MODE] ?? true);
+
     $nav = [
         ['label' => 'Dashboard',    'icon' => 'dashboard',   'route' => 'app.dashboard',       'feature' => null, 'permission' => null],
         ['label' => 'POS',          'icon' => 'pos',         'route' => 'app.pos.index', 'feature' => FeatureRegistry::POS_TERMINAL, 'permission' => PermissionRegistry::POS_OPERATE],
@@ -91,19 +95,59 @@
 
     <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
 
-    {{-- Set theme before paint to avoid flash --}}
+    {{--
+        Light / Dark / System (#74), applied BEFORE first paint so nobody sees a
+        white flash on the way to a dark screen.
+
+        Three states, not two. "System" is the default and it is a real choice
+        rather than an absence of one: somebody whose phone switches at sunset
+        expects this to switch with it, and a two-way toggle can only freeze
+        them on whichever side they last tapped.
+
+        ⚠️ Gated on the plan (`ui.dark_mode`). Where the feature is off the page
+        stays light and the picker is not drawn — an inert control teaches
+        people that controls do not work.
+    --}}
     <script>
+        window.themeAllowed = @json($darkModeAllowed);
+
         (function () {
-            const t = localStorage.theme;
-            if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                document.documentElement.classList.add('dark');
-            }
+            const stored = localStorage.theme;
+            const choice = window.themeAllowed ? (stored || 'system') : 'light';
+            const dark = choice === 'dark'
+                || (choice === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+            document.documentElement.classList.toggle('dark', dark);
         })();
-        function toggleTheme() {
-            const dark = document.documentElement.classList.toggle('dark');
-            localStorage.theme = dark ? 'dark' : 'light';
+
+        function applyTheme(choice) {
+            if (! window.themeAllowed) {
+                choice = 'light';
+            }
+
+            localStorage.theme = choice;
+
+            const dark = choice === 'dark'
+                || (choice === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+            document.documentElement.classList.toggle('dark', dark);
+
             // Charts (and anything else colour-aware) re-theme on this event.
-            window.dispatchEvent(new CustomEvent('theme-changed', { detail: { dark } }));
+            window.dispatchEvent(new CustomEvent('theme-changed', { detail: { dark, choice } }));
+        }
+
+        // Follow the operating system while the choice IS "system" — otherwise
+        // picking it would only mean "whatever the OS said when the page
+        // loaded", which is not what anybody means by it.
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+            if ((localStorage.theme || 'system') === 'system') {
+                applyTheme('system');
+            }
+        });
+
+        // Kept so older markup and any inline handler still works.
+        function toggleTheme() {
+            applyTheme(document.documentElement.classList.contains('dark') ? 'light' : 'dark');
         }
     </script>
 
@@ -219,19 +263,89 @@
                 <x-icon name="menu" />
             </button>
 
-            {{-- Global search (wired in Phase 13) --}}
-            <div class="relative hidden max-w-md flex-1 sm:block">
+            {{-- ─────────────────────── global search (#75) ──────────────────────
+                 Debounced and aborted on every keystroke: without the abort, a
+                 fast typist leaves six requests in flight and the dropdown ends
+                 up showing whichever one happened to land last — which is
+                 usually the results for a prefix they have already deleted. --}}
+            <div class="relative hidden max-w-md flex-1 sm:block"
+                 x-data="globalSearch()" @keydown.escape.window="close()">
                 <x-icon name="search" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input type="search" placeholder="Search products, customers, invoices…"
+
+                <input type="search" x-model="term" @input.debounce.250ms="run()" @focus="run()"
+                       placeholder="Search products, customers, invoices…"
+                       autocomplete="off"
                        class="input !py-2 !pl-9 bg-slate-50 dark:bg-slate-800/60">
+
+                <div x-show="open" x-cloak @click.outside="close()"
+                     x-transition:enter="transition ease-out duration-150"
+                     x-transition:enter-start="opacity-0 -translate-y-1"
+                     class="card absolute left-0 right-0 z-40 mt-2 max-h-96 overflow-y-auto p-0">
+
+                    <template x-if="loading">
+                        <p class="px-4 py-6 text-center text-sm text-slate-400">Searching…</p>
+                    </template>
+
+                    <template x-if="! loading && count === 0">
+                        <p class="px-4 py-6 text-center text-sm text-slate-400">
+                            Nothing matches “<span x-text="term"></span>”.
+                        </p>
+                    </template>
+
+                    <template x-for="(items, group) in groups" :key="group">
+                        <div class="border-b border-slate-100 last:border-0 dark:border-slate-800">
+                            <p class="px-4 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-slate-400"
+                               x-text="group"></p>
+
+                            <template x-for="item in items" :key="item.href + item.title">
+                                <a :href="item.href"
+                                   class="flex items-start gap-3 px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                                    <span class="min-w-0 flex-1">
+                                        <span class="block truncate text-sm font-medium text-slate-900 dark:text-white"
+                                              x-text="item.title"></span>
+                                        <span class="block truncate text-xs text-slate-500 dark:text-slate-400"
+                                              x-text="item.meta"></span>
+                                    </span>
+                                </a>
+                            </template>
+                        </div>
+                    </template>
+                </div>
             </div>
 
             <div class="ml-auto flex items-center gap-1.5">
-                {{-- Theme toggle --}}
-                <button onclick="toggleTheme()" class="btn-ghost p-2" aria-label="Toggle theme">
-                    <x-icon name="moon" class="block h-5 w-5 dark:hidden" />
-                    <x-icon name="sun" class="hidden h-5 w-5 dark:block" />
-                </button>
+                {{-- Theme: light / dark / system (#74) --}}
+                @if ($darkModeAllowed)
+                    <div class="relative" x-data="{ open: false, choice: localStorage.theme || 'system' }">
+                        <button @click="open = ! open" class="btn-ghost p-2" aria-label="Theme">
+                            <x-icon name="moon" class="block h-5 w-5 dark:hidden" />
+                            <x-icon name="sun" class="hidden h-5 w-5 dark:block" />
+                        </button>
+
+                        <div x-show="open" x-cloak @click.outside="open = false"
+                             x-transition:enter="transition ease-out duration-150"
+                             x-transition:enter-start="opacity-0 -translate-y-1"
+                             class="card absolute right-0 z-30 mt-2 w-40 p-1">
+                            @foreach (['light' => 'Light', 'dark' => 'Dark', 'system' => 'System'] as $value => $label)
+                                <button type="button"
+                                        @click="choice = @js($value); applyTheme(choice); open = false"
+                                        class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
+                                    {{ $label }}
+                                    {{-- ⚠️ A Blade directive inside a COMPONENT
+                                         attribute is not compiled — the tag
+                                         would carry the literal text
+                                         `choice === @js(...)` and Alpine would
+                                         never match. `:attr` evaluates the PHP
+                                         and passes the result, which is the
+                                         only way to build an Alpine expression
+                                         on a component. --}}
+                                    <x-icon name="check" class="h-4 w-4 text-brand-600"
+                                            :x-show="'choice === '.json_encode($value)" x-cloak />
+                                </button>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
 
                 {{-- ─────────────────────── the bell (#76, #77) ─────────────────────
                      Two kinds of thing live in here and behave in opposite ways:
@@ -348,9 +462,33 @@
             :read-only="$subscriptionReadOnly ?? false"
             :expired="$subscriptionExpired ?? false" />
 
-        {{-- Page header --}}
+        {{-- ─────────────────────────── page header (#164) ───────────────────
+             The breadcrumb is DERIVED from the nav item that is currently
+             active, not declared per screen. Sixty screens each passing their
+             own trail would mean sixty places to get it wrong, and the first
+             one somebody forgot would silently show nothing. --}}
         @if ($title)
+            @php
+                // The same family match the sidebar uses to highlight itself,
+                // so the trail and the highlight can never disagree.
+                $section = collect($nav)->first(function ($item) {
+                    return $item['route'] !== null
+                        && request()->routeIs(str_replace('.index', '.*', $item['route']));
+                });
+                $isSection = $section && $section['label'] === $title;
+            @endphp
+
             <div class="border-b border-slate-200 bg-white px-4 py-5 dark:border-slate-800 dark:bg-slate-900 sm:px-6">
+                @if ($section && ! $isSection)
+                    <nav class="mb-1.5 flex items-center gap-1.5 text-xs text-slate-400" aria-label="Breadcrumb">
+                        <a href="{{ route('app.dashboard') }}" class="hover:text-slate-600 dark:hover:text-slate-300">Dashboard</a>
+                        <span aria-hidden="true">/</span>
+                        <a href="{{ route($section['route']) }}" class="hover:text-slate-600 dark:hover:text-slate-300">{{ $section['label'] }}</a>
+                        <span aria-hidden="true">/</span>
+                        <span class="text-slate-500 dark:text-slate-400" aria-current="page">{{ $title }}</span>
+                    </nav>
+                @endif
+
                 <h1 class="text-xl font-bold tracking-tight text-slate-900 dark:text-white">{{ $title }}</h1>
             </div>
         @endif
@@ -372,6 +510,65 @@
             </div>
         </footer>
     </div>
+
+    <script>
+        /*
+         | The top-bar search (#75).
+         |
+         | The abort controller is the important part: every keystroke cancels
+         | the request before it, so the dropdown can only ever show the results
+         | for what is currently in the box. Without it a fast typist gets
+         | whichever response happened to arrive last.
+         */
+        function globalSearch() {
+            return {
+                term: '',
+                groups: {},
+                count: 0,
+                open: false,
+                loading: false,
+                controller: null,
+
+                close() {
+                    this.open = false;
+                },
+
+                run() {
+                    const term = this.term.trim();
+
+                    if (term.length < 2) {
+                        this.close();
+                        return;
+                    }
+
+                    this.controller?.abort();
+                    this.controller = new AbortController();
+
+                    this.open = true;
+                    this.loading = true;
+
+                    fetch(`{{ route('app.search') }}?q=${encodeURIComponent(term)}`, {
+                        headers: { 'Accept': 'application/json' },
+                        signal: this.controller.signal,
+                    })
+                        .then((r) => r.json())
+                        .then((data) => {
+                            this.groups = data.groups ?? {};
+                            this.count = data.count ?? 0;
+                            this.loading = false;
+                        })
+                        .catch((e) => {
+                            // An aborted request is the normal case, not a fault.
+                            if (e.name !== 'AbortError') {
+                                this.loading = false;
+                                this.count = 0;
+                                this.groups = {};
+                            }
+                        });
+                },
+            };
+        }
+    </script>
 
     @livewireScripts
     @stack('scripts')

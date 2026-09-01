@@ -115,3 +115,41 @@
         dark:bg-brand-500/10 dark:text-brand-300 dark:hover:bg-brand-500/10 dark:hover:text-brand-300;
     }
 }
+
+/*
+|--------------------------------------------------------------------------
+| Motion (#73)
+|--------------------------------------------------------------------------
+| Everything that moves in this app moves for 150–300ms and never blocks a
+| click: an animation the user has to wait out is a slower app wearing a nicer
+| coat. These two custom properties are the only durations in the system, so
+| "make it snappier" is one edit rather than a hunt through forty files.
+*/
+:root {
+    --motion-fast: 150ms;
+    --motion-base: 200ms;
+    --motion-slow: 300ms;
+}
+
+/*
+| ⚠️ SOMEBODY WHO ASKED FOR LESS MOTION MEANT IT.
+|
+| `prefers-reduced-motion` is set by people who get migraines or motion sickness
+| from movement on screen — it is an accessibility setting, not a taste. Honour
+| it globally rather than per component, because the one animation that was
+| missed is the one that makes somebody ill.
+|
+| Durations are collapsed to almost-zero rather than to zero: a few transitions
+| rely on their `transitionend` firing, and a duration of exactly 0 does not
+| always dispatch it.
+*/
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
