@@ -87,10 +87,33 @@ Phir PHP restart karein: *App Store → PHP 8.2 → Service → Restart*.
 
 SSH se root ban kar andar aayen.
 
+⚠️ **`git clone . ` yahan kaam NAHI karega.** Directory khali nahi hai — aaPanel
+us mein `.user.ini`, `index.html` aur `404.html` daal chuka hai, aur `.user.ini`
+par **immutable flag** (`chattr +i`) laga hota hai, to `rm` bhi mana kar dega:
+
+```
+rm: cannot remove '.user.ini': Operation not permitted
+fatal: destination path '.' already exists and is not an empty directory
+```
+
+Us file se larne ki zaroorat nahi — wo aaPanel ki `open_basedir` protection hai.
+Repo ko wahin `git init` se le aayen, aur usay chhor dein:
+
 ```bash
 cd /www/wwwroot/pos.knbazaar.com
-rm -rf .user.ini index.html 404.html          # aaPanel ki placeholder files
-git clone https://github.com/knsoftic/pos.git .
+git init
+git remote add origin https://github.com/knsoftic/pos.git
+git fetch origin
+git checkout -f -b master origin/master
+```
+
+`index.html` aur `404.html` bhi rehne dein — step 5 ke baad nginx `public/` se
+serve karega, site root se nahi, to wo kabhi khulti hi nahi.
+
+Tasdeeq kar lein ke code aa gaya:
+
+```bash
+ls artisan && git log --oneline -1
 ```
 
 Neeche har jagah aaPanel wali PHP binary ka poora rasta likha hai, kyunke box
@@ -169,6 +192,26 @@ location / {
 **Abhi check karein**, aage barhne se pehle:
 `https://pos.knbazaar.com/login` ko 404 ke ilawa kuch dena chahiye. Yahan 404 ka
 matlab hai ke in do settings mein se koi lagi nahi.
+
+### Agar `open_basedir restriction in effect` aaye
+
+Run directory badalne par aaPanel `.user.ini` dobara likh sakta hai aur
+`open_basedir` ko sirf `public/` tak mehdood kar deta hai. Laravel ko
+`../vendor` aur `../storage` chahiye, jo us hadd se bahar hain — is liye site
+is error ke saath ruk jati hai. Do mein se aik:
+
+- Us site ke liye aaPanel ki **cross-site protection band kar dein**
+  (*Website → pos.knbazaar.com → Settings → Anti-XSS / 防跨站*), **ya**
+- `open_basedir` ko project root par rakhein:
+
+```bash
+cd /www/wwwroot/pos.knbazaar.com
+chattr -i .user.ini
+sed -i 's|^open_basedir=.*|open_basedir=/www/wwwroot/pos.knbazaar.com/:/tmp/|' .user.ini
+chattr +i .user.ini
+```
+
+Ye error na aaye to kuch karne ki zaroorat nahi.
 
 ---
 
