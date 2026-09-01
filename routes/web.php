@@ -13,6 +13,8 @@ use App\Http\Controllers\App\BillingController;
 use App\Http\Controllers\App\BranchController;
 use App\Http\Controllers\App\BrandController;
 use App\Http\Controllers\App\CategoryController;
+use App\Http\Controllers\App\CustomerController;
+use App\Http\Controllers\App\CustomerLedgerController;
 use App\Http\Controllers\App\DashboardController as AppDashboardController;
 use App\Http\Controllers\App\EmployeeController;
 use App\Http\Controllers\App\InventoryController;
@@ -21,6 +23,7 @@ use App\Http\Controllers\App\ProductController;
 use App\Http\Controllers\App\ProductImportController;
 use App\Http\Controllers\App\RoleController;
 use App\Http\Controllers\App\StockTransferController;
+use App\Http\Controllers\App\SupplierController;
 use App\Http\Controllers\App\UnitController;
 use App\Http\Controllers\Auth\AdminLoginController;
 use App\Http\Controllers\Auth\BusinessLoginController;
@@ -242,6 +245,68 @@ Route::middleware('tenant.app')
             Route::get('units/{unit}/edit', [UnitController::class, 'edit'])->name('units.edit');
             Route::put('units/{unit}', [UnitController::class, 'update'])->name('units.update');
             Route::delete('units/{unit}', [UnitController::class, 'destroy'])->name('units.destroy');
+        });
+
+        /*
+        |--------------------------------------------------------------------
+        | Customers & suppliers (Phase 5)
+        |--------------------------------------------------------------------
+        | Three authorities, not one, and the split is deliberate (#52):
+        |
+        |   *.view    reading the list and the profile
+        |   *.manage  editing who they are
+        |   *.ledger  moving what they owe — the sensitive one
+        |
+        | A shop assistant who may look a customer up should not thereby be able
+        | to write off their debt.
+        */
+
+        // ---- customers (#39, #40, #41, #105) --------------------------------
+        Route::middleware('feature:customers.management')->group(function () {
+            Route::get('customers', [CustomerController::class, 'index'])
+                ->middleware('permission:customers.view')->name('customers.index');
+
+            Route::middleware('permission:customers.manage')->group(function () {
+                Route::get('customers/create', [CustomerController::class, 'create'])->name('customers.create');
+                Route::post('customers', [CustomerController::class, 'store'])->name('customers.store');
+                Route::get('customers/{customer}/edit', [CustomerController::class, 'edit'])->name('customers.edit');
+                Route::put('customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
+                Route::post('customers/{customer}/toggle', [CustomerController::class, 'toggle'])->name('customers.toggle');
+                Route::delete('customers/{customer}', [CustomerController::class, 'destroy'])->name('customers.destroy');
+            });
+
+            Route::get('customers/{customer}', [CustomerController::class, 'show'])
+                ->middleware('permission:customers.view')->name('customers.show');
+
+            // The ledger sits behind its own feature AND its own permission: a
+            // plan without customer accounts has no statements to move money on.
+            Route::middleware(['feature:accounting.customer_ledger', 'permission:customers.ledger'])->group(function () {
+                Route::post('customers/{customer}/payments', [CustomerLedgerController::class, 'payment'])->name('customers.payments');
+                Route::post('customers/{customer}/adjustments', [CustomerLedgerController::class, 'adjustment'])->name('customers.adjustments');
+            });
+        });
+
+        // ---- suppliers (#38, #42) -------------------------------------------
+        Route::middleware('feature:purchases.supplier_ledger')->group(function () {
+            Route::get('suppliers', [SupplierController::class, 'index'])
+                ->middleware('permission:suppliers.view')->name('suppliers.index');
+
+            Route::middleware('permission:suppliers.manage')->group(function () {
+                Route::get('suppliers/create', [SupplierController::class, 'create'])->name('suppliers.create');
+                Route::post('suppliers', [SupplierController::class, 'store'])->name('suppliers.store');
+                Route::get('suppliers/{supplier}/edit', [SupplierController::class, 'edit'])->name('suppliers.edit');
+                Route::put('suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
+                Route::post('suppliers/{supplier}/toggle', [SupplierController::class, 'toggle'])->name('suppliers.toggle');
+                Route::delete('suppliers/{supplier}', [SupplierController::class, 'destroy'])->name('suppliers.destroy');
+            });
+
+            Route::get('suppliers/{supplier}', [SupplierController::class, 'show'])
+                ->middleware('permission:suppliers.view')->name('suppliers.show');
+
+            Route::middleware('permission:suppliers.ledger')->group(function () {
+                Route::post('suppliers/{supplier}/payments', [SupplierController::class, 'payment'])->name('suppliers.payments');
+                Route::post('suppliers/{supplier}/adjustments', [SupplierController::class, 'adjustment'])->name('suppliers.adjustments');
+            });
         });
 
         // ---- employees (#50) -----------------------------------------------

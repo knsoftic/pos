@@ -16,7 +16,7 @@
 | **Environment** | Windows 11 + XAMPP (PHP + MySQL/MariaDB) |
 | **Start Date** | 2026-08-25 |
 | **Demo logins** | [LOGIN_CREDENTIALS.md](LOGIN_CREDENTIALS.md) — seeded accounts (dev only, #191) |
-| **Current Status** | ✅ **Phase 4 MUKAMMAL (100%)** — Catalog + inventory engine + stock transfers + **batch/expiry (FEFO)** + **barcode labels** + **product images** + **CSV import/export**. Phases 0–4 mukammal. **KN Softic branding** poore system pe live. **361 tests / 1,129 assertions pass** (MySQL `pos_saas_test`). Build + browser verified, console zero errors. ➡️ **Next: Phase 5** (Customers + Suppliers + Ledgers). |
+| **Current Status** | ✅ **Phase 5 MUKAMMAL (100%)** — Customers + Suppliers + dono ke **ledgers** (debit/credit/running balance, credit limits, blocking, statements). Phases 0–5 mukammal. **KN Softic branding** poore system pe live. **402 tests / 1,259 assertions pass** (MySQL `pos_saas_test`). Build + browser verified, console zero errors. ➡️ **Next: Phase 6** (Purchases + Supplier Ledger). |
 
 ---
 
@@ -41,7 +41,7 @@
 | **2** | Plans + Subscriptions + Features + Limits + Businesses | ✅ Ho gaya | 100% |
 | **3** | Roles + Permissions + Branches + POS Counters + Employees | ✅ Ho gaya | 100% |
 | **4** | Products + Categories + Brands + Units + Inventory | ✅ Ho gaya | 100% |
-| **5** | Customers + Suppliers (+ Ledgers) | ⬜ Baqi | 0% |
+| **5** | Customers + Suppliers (+ Ledgers) | ✅ Ho gaya | 100% |
 | **6** | Purchases + Supplier Ledger | ⬜ Baqi | 0% |
 | **7** | POS + Sales + Payments + Customer Ledger | ⬜ Baqi | 0% |
 | **8** | Returns + Stock Adjustments + Transfers | ⬜ Baqi | 0% |
@@ -52,7 +52,7 @@
 | **13** | Animations + UI Polish + Performance | ⬜ Baqi | 0% |
 | **14** | Security + Testing | 🔄 Chal raha hai | ~25% |
 | **15** | Deployment Preparation | ⬜ Baqi | 0% |
-| | **TOTAL PROGRESS** | 🟢 | **~42%** |
+| | **TOTAL PROGRESS** | 🟢 | **~48%** |
 
 ---
 
@@ -112,6 +112,64 @@ Poore project ka audit hua, **KN Softic ki professional branding** lagi, aik pur
 **⬜ Phase 4 mein ab sirf ye baqi:** batch + expiry tracking (#34) · barcode label printing (#27) · product image upload (#149) · CSV import/export (#150/#151).
 
 ➡️ **Next:** Phase 4 close (expiry + barcode + import/export), phir **Phase 5** — Customers + Suppliers + ledgers.
+
+
+### 2026-08-29 — Phase 5 MUKAMMAL ✅ (Customers + Suppliers + Ledgers)
+
+Ab dukaan ke **khaate** ban gaye — kaun kitna deta hai, kaun kitna lena hai, aur har rupaye ki poori history.
+
+**✅ JO HO GAYA:**
+
+**1) Aik arithmetic, do heading — sab se ahem faisla**
+- **DEBIT** hamesha barhata hai ke account kitna deta hai; **CREDIT** hamesha kam karta hai. Ye dono parties ke liye bilkul aik jaisa hai. Farq sirf ye hai ke *"deta hai"* ka **matlab** kya hai:
+  - **Customer** — balance *receivable* hai: positive matlab **customer ne humein dena hai**. Udhaar sale debit, unki payment credit.
+  - **Supplier** — balance *payable* hai: positive matlab **humne unko dena hai**. Purchase debit, unki payment credit.
+- Faida: screen pe positive balance hamesha aik hi tarah parha jata hai. **Aik arithmetic, do heading** — bajaye do alag sign conventions ke, jo aik din zaroor aapas mein mix ho jate.
+- `LedgerEntryType::direction()` waahid jagah hai jo faisla karti hai (bilkul `StockMovementType` ki tarah), to kisi caller ko yaad nahi rakhna parta ke return kis taraf jata hai.
+
+**2) `ledger_entries` — aik table, dono parties (morph)**
+- **Append-only, koi `updated_at` nahi.** Financial line kabhi edit nahi hoti; ghalti ka ilaj **ulti entry** post karna hai (#133, #198). Yehi isay saboot banata hai.
+- **Do near-identical tables kyun nahi:** running-balance ka logic do jagah copy hota, aur jo copy kam use hoti wohi drift karti. Customer aur supplier mein farq **matlab** ka hai, **hisab** ka nahi — to matlab party pe rehta hai, hisab yahan.
+- **`debit` aur `credit` alag non-negative columns**, aik signed amount nahi: screen aik accounting statement hai jise waise bhi do column chahiye, aur signed amount reader ko andaza lagane pe majboor karta hai ke kaunsa sign kya matlab rakhta hai.
+- `balance_after` locked transaction ke andar stamp hota hai, to statement ko history dobara compute nahi karni parti.
+- ⚠️ **Branch-scoped NAHI** (#137): `branch_id` sirf batata hai kahan hua. Aik customer High Street pe udhaar le kar Retail Park pe utaar sakta hai — yehi to point hai.
+
+**3) `PartyLedgerService` — balance badalne ka waahid raasta (#183)**
+- Bilkul `InventoryService` jaisa shape, jaan boojh kar: **masla wahi masla hai.** Append-only ledger sach hai, party ka `balance` column cache hai jo usi locked transaction mein chalta hai, aur `recalculate()` aik ko doosre se dobara banata hai — repair tool bhi, **saboot bhi**.
+- Aik entry atomically: party row pe **`lockForUpdate`** (do till aik hi customer se payment lein to queue karein, dono aik hi purana balance na parhein) → type se debit/credit → balance stamp → cache update.
+- `CustomerLedgerService` aur `SupplierLedgerService` sirf party-specific vocabulary add karti hain (#183 dono ka naam leta hai).
+
+**4) Credit limits (#40) — teen values, aik convention**
+- `NULL` = koi ceiling nahi · `0` = **cash only (DEFAULT)** · `n` = itna hi.
+- Default cash-only is liye hai ke **kisi ko udhaar dena aik faisla hona chahiye**, default nahi.
+- Gate **service mein** hai, POS mein nahi — to har raasta (till, API, import) aik hi limit se guzarta hai. Blocked customer kabhi paas nahi hota, uski limit chahe kuch bhi ho (#105).
+- Credit sale **plan capability** bhi hai: `sales.credit_sales` feature na ho to service khud mana kar deti hai.
+
+**5) Blocked ≠ deleted ≠ hidden (#105)**
+- Blocked customer ka record, statement aur **har rupaya** waisa ka waisa rehta hai. Wo sirf transact nahi kar sakta, aur **wajah record hoti hai**. Payment phir bhi li ja sakti hai — blocked customer ka hisab chukana to bilkul wohi cheez hai jo dukaan chahti hai.
+- Jis account ki statement hai wo **delete nahi hota, archive hota hai** (#104) — delete uski poori history le jata.
+
+**6) Statement — asli accounting format (#41, #42)**
+- Date · Particulars · Debit · Credit · Running balance, **oldest first** (running balance sirf neeche ki taraf hi sahi parha jata hai).
+- **Filtered statement "brought forward" carry karta hai** — window se pehle ka balance ledger se nikal kar upar dikhaya jata hai, warna period ka statement add hi nahi hota.
+- Footer mein period totals, taake statement khud ko foot kar sake.
+
+**7) Opening balance (#152 ka usool, paison pe)** — jo pehle se lena/dena tha wo bhi **ledger se hi post** hota hai, to din aik usi history ka hissa hai jis ka din hazaar. Aik shelf pe sirf aik dafa; doosri entry correction hai, aur correction adjustment hai.
+
+**🐞 Do asli bugs jo tests ne pakre:**
+1. **`credit_limit` NOT NULL thi** jabke poora design `NULL = unlimited` pe chalta hai — migration ka comment ye keh raha tha aur column ye kar hi nahi sakti thi. Column nullable ki.
+2. **Credit-limit resolution ka order ghalat tha:** form "unlimited" tick hone pe amount field **disable** kar deta hai, aur disabled input **submit hota hi nahi**. Code pehle missing amount parhta tha → har unlimited account chup-chaap **cash-only** ban jata. Ab "unlimited" pehle check hota hai.
+
+**8) ⚠️ Tests — 41 naye, sab PASS**
+- `Parties/PartyLedgerTest` (26): dono taraf ka debit/credit, overpayment se credit balance, returns, credit limits (cash-only / limit paar / unlimited / blocked / plan feature), ghalat side ki entry reject, adjustments + audit, opening balance sirf aik dafa, statement ki running balance, **filtered statement ka brought-forward**, recalculate drift detect karta hai, summary statement se foot karti hai, **branch A pe udhaar → branch B pe payment (#137)**, cross-tenant refuse.
+- `Parties/PartyAccessTest` (15): poora owner flow, **teen alag authorities** (view / manage / ledger) — dekhne wala edit nahi kar sakta, edit karne wala paise nahi hila sakta; blocking reason record karti hai; statement wala delete nahi hota; quota; feature gates; cross-tenant 404; validation (positive payment, future date nahi, reason lazmi, duplicate code).
+- **Result: `php artisan test` → 402 tests / 1,259 assertions PASS**.
+
+**9) Seeder + build + browser verification**
+- Demo data ab asli account history ke saath: **Ayesha Traders** (12,000 opening + 18,500 sale − 20,000 payment − 1,500 return = **9,000**), **Hassan Catering** (5,000 deposit → in credit), **Walk-in Customer** (cash only), **Metro Cash & Carry** (45,000 + 62,000 − 80,000 = **27,000 you owe**), **Gulberg Textiles** (settled). Har figure ledger service se post hua hai, `balance` column mein likha nahi gaya.
+- ✅ Browser verified: customers list (Owed to you 9,000 / Held in credit 5,000), **customer profile** (4 cards + details + credit "45,000 still available"), **statement** jisme period total `30,500 | 21,500 | 9,000` bilkul foot karta hai, aur browser se **asli payment** li: *"Received 4,000.00. They now owe 5,000.00."*; suppliers list (You owe 27,000). Zero console errors.
+
+➡️ **Next: Phase 6** — Purchases + Supplier Ledger (ab supplier ledger tayyar hai, purchases usi pe post karengi).
 
 
 ### 2026-08-29 — Phase 4 MUKAMMAL ✅ (batch/expiry + barcode labels + images + import/export)
@@ -700,19 +758,19 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 *(Spec ref: #38–42, #137, #183)*
 
 ### Customers
-- [ ] Customer management (full form) — #39
-- [ ] Customer profile (purchases, paid, due, history) — #39
-- [ ] Customer credit sales (plan/permission based) — #40
-- [ ] Customer ledger (Debit/Credit/Balance) — #41
-- [ ] `CustomerLedgerService` — #183
-- [ ] Global business-level customers (multi-branch) — #137
-- [ ] Customer status (Active/Blocked) — #105
+- [x] Customer management (full form) — #39 *(`CustomerService` — quota, central code allocation, archive-not-delete)*
+- [x] Customer profile (purchases, paid, due, history) — #39 *(figures **ledger se** aati hain, sales se nahi — to summary neeche wali statement se foot karti hai)*
+- [x] Customer credit sales (plan/permission based) — #40 *(NULL = no ceiling · 0 = **cash only (default)** · n = itna hi; gate **service mein** hai to har raasta usi limit se guzarta hai; plan ka `sales.credit_sales` bhi check hota hai)*
+- [x] Customer ledger (Debit/Credit/Balance) — #41 *(append-only, koi `updated_at` nahi; running balance har line pe stamped; filtered statement **brought forward** carry karta hai)*
+- [x] `CustomerLedgerService` — #183 *(shared `PartyLedgerService` pe — locked transaction, `recalculate()` ledger se rebuild karta hai)*
+- [x] Global business-level customers (multi-branch) — #137 *(branch-scoped **nahi**: High Street pe udhaar, Retail Park pe payment — test isi ko pin karta hai)*
+- [x] Customer status (Active/Blocked) — #105 *(blocked ≠ deleted ≠ hidden: record, statement aur balance waise ke waise; wajah record hoti hai; payment phir bhi li ja sakti hai)*
 
 ### Suppliers
-- [ ] Supplier management (full form) — #38
-- [ ] Supplier profile (purchases, paid, due, returns, history) — #38
-- [ ] Supplier ledger (accounting format) — #42
-- [ ] `SupplierLedgerService` — #183
+- [x] Supplier management (full form) — #38 *(`SupplierService`; payment terms — blank matlab "koi agreed terms nahi", "abhi due" nahi)*
+- [x] Supplier profile (purchases, paid, due, returns, history) — #38 *(customer profile ka mirror; over-payment **advance** ban jati hai)*
+- [x] Supplier ledger (accounting format) — #42 *(wahi statement component — sirf heading badalti hai: "You owe" vs "Owes")*
+- [x] `SupplierLedgerService` — #183 *(`PartyLedgerService` ka doosra bacha — **aik arithmetic, do heading**)*
 
 ---
 
@@ -880,11 +938,11 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 - [x] Feature tests: Plan Limits, Plan Features — #116 *(`Subscription/PlanLimitTest` 29 + `Subscription/PlanFeatureTest` 21 — resolution order, unlimited, enforcement, cache invalidation, `CheckFeature` middleware)*
 - [ ] Feature tests: POS Sale — #116 · [x] **Stock Update** *(`Inventory/InventoryTest` 31 — ledger vs cache, negative stock, costing, per-branch isolation)*
 - [ ] Feature tests: Purchase, Returns — #116
-- [ ] Feature tests: Customer/Supplier Balance — #116
+- [x] Feature tests: Customer/Supplier Balance — #116 *(`Parties/PartyLedgerTest` 26 + `Parties/PartyAccessTest` 15 — dono taraf ka debit/credit, credit limits, blocking, statement ka foot karna, drift detection)*
 - [x] Feature tests: Subscription Expiry — #116 *(`Subscription/SubscriptionExpiryTest` 26 + `Subscription/SubscriptionGateTest` 22 — trial/grace/expiry, lock vs read-only vs pos-off, stale status column dono taraf se)*
 - [x] ⚠️ Tenant leak test (Business A → Business B URL = 403/404) — #117 *(cross-tenant PK `find()` → null; dashboard HTTP test dono tenants pe; request input se tenant switch block)*
 
-> **Ab tak ka test status:** `php artisan test` → **361 tests / 1,129 assertions PASS** (MySQL `pos_saas_test`) — Auth 22 · PasswordReset 11 · TenantIsolation 20 · PlanLimit 29 · PlanFeature 21 · SubscriptionExpiry 26 · SubscriptionGate 22 · RolePermission 31 · BranchAccess 19 · Employee 20 · Catalog 23 · Product 24 · Inventory 31 · StockTransfer 22 · BatchExpiry 17 · CatalogTools 22 · Unit 1. Har naye phase ke saath yahan tests barhte rahenge.
+> **Ab tak ka test status:** `php artisan test` → **402 tests / 1,259 assertions PASS** (MySQL `pos_saas_test`) — Auth 22 · PasswordReset 11 · TenantIsolation 20 · PlanLimit 29 · PlanFeature 21 · SubscriptionExpiry 26 · SubscriptionGate 22 · RolePermission 31 · BranchAccess 19 · Employee 20 · Catalog 23 · Product 24 · Inventory 31 · StockTransfer 22 · BatchExpiry 17 · CatalogTools 22 · PartyLedger 26 · PartyAccess 15 · Unit 1. Har naye phase ke saath yahan tests barhte rahenge.
 
 ---
 

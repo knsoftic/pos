@@ -4,22 +4,26 @@ namespace Database\Seeders;
 
 use App\Enums\BillingCycle;
 use App\Models\Admin;
-use App\Models\Business;
 use App\Models\Branch;
+use App\Models\Business;
 use App\Models\BusinessFeatureOverride;
 use App\Models\Feature;
 use App\Models\Plan;
 use App\Models\Product;
-use App\Models\StockBatch;
 use App\Models\Role;
+use App\Models\StockBatch;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\CatalogService;
+use App\Services\CustomerLedgerService;
+use App\Services\CustomerService;
 use App\Services\FeatureService;
 use App\Services\InventoryService;
 use App\Services\OrganizationProvisioner;
 use App\Services\ProductService;
 use App\Services\SubscriptionService;
+use App\Services\SupplierLedgerService;
+use App\Services\SupplierService;
 use App\Support\FeatureRegistry;
 use App\Support\TenantContext;
 use Illuminate\Database\Seeder;
@@ -91,11 +95,112 @@ class DatabaseSeeder extends Seeder
         // something to show the moment you log in (#112).
         $this->seedCatalog($store);
 
+        // The people the shop trades with, and enough account history for the
+        // statements to have something to foot (#39, #38).
+        $this->seedParties($store);
+
         $this->command?->info('Seeded accounts (password = "password"):');
         $this->command?->info('  Super admin  → superadmin@pos.test   (/admin/login)');
         $this->command?->info('  Business #1  → owner@demo.test        (/login)  [Professional, paid]');
         $this->command?->info('  Business #2  → owner2@demo.test       (/login)  [Starter, trial]');
         $this->command?->info('  Employee     → cashier@demo.test      (/login)  [Cashier role, Main Branch]');
+    }
+
+    /**
+     * Customers and suppliers with real account history (#39, #38, #41, #42).
+     *
+     * Every figure is posted through the ledger services rather than written to
+     * the balance column, so the seeded state is one the app could actually have
+     * produced — and the statements foot to the balances.
+     */
+    protected function seedParties(Business $store): void
+    {
+        app(TenantContext::class)->runFor($store, function (): void {
+            $customers = app(CustomerService::class);
+            $customerLedger = app(CustomerLedgerService::class);
+
+            // An account customer who owes money.
+            $ayesha = $customers->create([
+                'name' => 'Ayesha Traders',
+                'phone' => '0300 1234567',
+                'city' => 'Lahore',
+                'credit_limit' => 50000,
+                'opening_balance' => 12000,
+                'opening_balance_date' => now()->subMonths(2)->toDateString(),
+            ]);
+
+            $customerLedger->chargeSale($ayesha, 18500, [
+                'entry_date' => now()->subDays(21)->toDateString(),
+                'description' => 'Monthly order',
+                'reference_no' => 'INV-1041',
+            ]);
+
+            $customerLedger->recordPayment($ayesha->fresh(), 20000, [
+                'entry_date' => now()->subDays(9)->toDateString(),
+                'payment_method' => 'bank_transfer',
+                'reference_no' => 'TRF-8890',
+            ]);
+
+            $customerLedger->recordReturn($ayesha->fresh(), 1500, [
+                'entry_date' => now()->subDays(4)->toDateString(),
+                'description' => 'Two damaged cases returned',
+            ]);
+
+            // A walk-in: cash only, nothing outstanding.
+            $customers->create([
+                'name' => 'Walk-in Customer',
+                'phone' => '—',
+                'notes' => 'The default account for cash sales.',
+            ]);
+
+            // One in credit, from a deposit.
+            $deposit = $customers->create([
+                'name' => 'Hassan Catering',
+                'phone' => '0321 7654321',
+                'city' => 'Lahore',
+                'credit_limit' => 20000,
+            ]);
+
+            $customerLedger->recordPayment($deposit, 5000, [
+                'entry_date' => now()->subDays(6)->toDateString(),
+                'payment_method' => 'cash',
+                'description' => 'Deposit for next month',
+            ]);
+
+            // ---- suppliers -------------------------------------------------
+            $suppliers = app(SupplierService::class);
+            $supplierLedger = app(SupplierLedgerService::class);
+
+            $metro = $suppliers->create([
+                'name' => 'Metro Cash & Carry',
+                'contact_person' => 'Imran Sheikh',
+                'phone' => '042 111 222 333',
+                'city' => 'Lahore',
+                'payment_terms_days' => 30,
+                'opening_balance' => 45000,
+                'opening_balance_date' => now()->subMonths(2)->toDateString(),
+            ]);
+
+            $supplierLedger->recordPurchase($metro, 62000, [
+                'entry_date' => now()->subDays(18)->toDateString(),
+                'description' => 'Beverages restock',
+                'reference_no' => 'PO-2207',
+            ]);
+
+            $supplierLedger->recordPayment($metro->fresh(), 80000, [
+                'entry_date' => now()->subDays(5)->toDateString(),
+                'payment_method' => 'bank_transfer',
+                'reference_no' => 'TRF-4412',
+            ]);
+
+            $suppliers->create([
+                'name' => 'Gulberg Textiles',
+                'contact_person' => 'Nadia Aslam',
+                'phone' => '042 999 888 777',
+                'city' => 'Lahore',
+                'payment_terms_days' => 15,
+            ]);
+        });
     }
 
     /**

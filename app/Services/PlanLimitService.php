@@ -8,9 +8,11 @@ use App\Models\Brand;
 use App\Models\Business;
 use App\Models\BusinessLimitOverride;
 use App\Models\Category;
+use App\Models\Customer;
 use App\Models\Limit;
 use App\Models\PosCounter;
 use App\Models\Product;
+use App\Models\Supplier;
 use App\Models\User;
 use App\Support\LimitRegistry;
 use App\Support\TenantContext;
@@ -351,6 +353,19 @@ class PlanLimitService
         $this->registerUsageResolver(
             LimitRegistry::BRANDS,
             fn (int $businessId): int => Brand::query()->forBusiness($businessId)->count(),
+        );
+
+        // Phase 5 — the people the business trades with. A blocked account still
+        // occupies a slot: it is on file, and unblocking must not turn into a
+        // quota decision taken by surprise.
+        $this->registerUsageResolver(
+            LimitRegistry::CUSTOMERS,
+            fn (int $businessId): int => Customer::query()->forBusiness($businessId)->count(),
+        );
+
+        $this->registerUsageResolver(
+            LimitRegistry::SUPPLIERS,
+            fn (int $businessId): int => Supplier::query()->forBusiness($businessId)->count(),
         );
     }
 
