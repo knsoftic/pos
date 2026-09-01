@@ -25,6 +25,7 @@ use App\Http\Controllers\App\ProductImportController;
 use App\Http\Controllers\App\PurchaseController;
 use App\Http\Controllers\App\PurchaseReturnController;
 use App\Http\Controllers\App\RoleController;
+use App\Http\Controllers\App\SaleController;
 use App\Http\Controllers\App\StockTransferController;
 use App\Http\Controllers\App\SupplierController;
 use App\Http\Controllers\App\UnitController;
@@ -263,6 +264,29 @@ Route::middleware('tenant.app')
         | A shop assistant who may look a customer up should not thereby be able
         | to write off their debt.
         */
+
+        /*
+        |--------------------------------------------------------------------
+        | Sales, after the fact (Phase 7)
+        |--------------------------------------------------------------------
+        | `sales.view` lets someone find their OWN sales; `sales.view_all` shows
+        | everyone's. The narrower one is what a cashier needs — the receipt they
+        | printed five minutes ago — and it is enforced in the query, not by
+        | hiding rows on a page that already fetched them.
+        |
+        | The receipt is deliberately reachable with only `sales.view`: reprinting
+        | for the customer standing at the counter is the same job as selling.
+        */
+        Route::middleware('feature:sales.invoicing')->group(function () {
+            Route::middleware('permission:sales.view')->group(function () {
+                Route::get('sales', [SaleController::class, 'index'])->name('sales.index');
+                Route::get('sales/{sale}', [SaleController::class, 'show'])->name('sales.show');
+                Route::get('sales/{sale}/receipt', [SaleController::class, 'receipt'])->name('sales.receipt');
+            });
+
+            Route::post('sales/{sale}/void', [SaleController::class, 'void'])
+                ->middleware('permission:sales.void')->name('sales.void');
+        });
 
         /*
         |--------------------------------------------------------------------

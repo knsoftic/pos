@@ -388,9 +388,21 @@
                     <span class="font-semibold tabular-nums" x-text="money(done?.due || 0)"></span> on account
                 </p>
 
-                <button type="button" @click="newSale()" class="btn btn-primary mt-5 w-full">
-                    New sale (Esc)
-                </button>
+                {{-- #145: print, or move straight on. The receipt opens in its
+                     own tab so the till itself never navigates away — the next
+                     customer is already waiting. --}}
+                <div class="mt-5 grid grid-cols-2 gap-2">
+                    <a :href="'/app/sales/' + done?.id + '/receipt'" target="_blank" class="btn btn-secondary">
+                        <x-icon name="printer" class="h-4 w-4" /> Receipt
+                    </a>
+                    <button type="button" @click="newSale()" class="btn btn-primary">
+                        New sale (Esc)
+                    </button>
+                </div>
+
+                <a :href="'/app/sales/' + done?.id" class="mt-2 block text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                    View the sale
+                </a>
             </div>
         </div>
     </div>

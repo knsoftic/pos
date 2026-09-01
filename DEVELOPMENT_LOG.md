@@ -16,7 +16,7 @@
 | **Environment** | Windows 11 + XAMPP (PHP + MySQL/MariaDB) |
 | **Start Date** | 2026-08-25 |
 | **Demo logins** | [LOGIN_CREDENTIALS.md](LOGIN_CREDENTIALS.md) — seeded accounts (dev only, #191) |
-| **Current Status** | 🔄 **Phase 7 chal raha hai (~75%)** — Sale engine **+ POS screen** mukammal: cart browser mein (instant), server har cheez dobara price karta hai, barcode scan, hold/resume, split payment + quick cash, shortcuts, aur **idempotency key se double-submit protection** (#91). Baqi: sales list + receipts. Phases 0–6 mukammal. **487 tests / 1,548 assertions pass**. Browser se asli sale verify ki. ➡️ **Next: Phase 7 Session 3** — sales list + invoice/receipt printing. |
+| **Current Status** | ✅ **Phase 7 MUKAMMAL (100%)** — Sale engine (#118 ke solah steps) + POS screen + sales book + receipts (58mm/80mm/A4) + reprint ginti. **Phases 0–7 mukammal.** **502 tests / 1,607 assertions pass** (MySQL `pos_saas_test`). Build + browser verified: till se asli sale, split payment receipt, credit sale, reprint marker. ➡️ **Next: Phase 8** (Returns + Stock Adjustments + Transfers — asal kaam **sale returns** hai). |
 
 ---
 
@@ -43,7 +43,7 @@
 | **4** | Products + Categories + Brands + Units + Inventory | ✅ Ho gaya | 100% |
 | **5** | Customers + Suppliers (+ Ledgers) | ✅ Ho gaya | 100% |
 | **6** | Purchases + Supplier Ledger | ✅ Ho gaya | 100% |
-| **7** | POS + Sales + Payments + Customer Ledger | 🔄 Chal raha hai | ~75% |
+| **7** | POS + Sales + Payments + Customer Ledger | ✅ Ho gaya | 100% |
 | **8** | Returns + Stock Adjustments + Transfers | ⬜ Baqi | 0% |
 | **9** | Expenses + Profit & Loss | ⬜ Baqi | 0% |
 | **10** | Reports | ⬜ Baqi | 0% |
@@ -52,7 +52,7 @@
 | **13** | Animations + UI Polish + Performance | ⬜ Baqi | 0% |
 | **14** | Security + Testing | 🔄 Chal raha hai | ~25% |
 | **15** | Deployment Preparation | ⬜ Baqi | 0% |
-| | **TOTAL PROGRESS** | 🟢 | **~61%** |
+| | **TOTAL PROGRESS** | 🟢 | **~65%** |
 
 ---
 
@@ -112,6 +112,49 @@ Poore project ka audit hua, **KN Softic ki professional branding** lagi, aik pur
 **⬜ Phase 4 mein ab sirf ye baqi:** batch + expiry tracking (#34) · barcode label printing (#27) · product image upload (#149) · CSV import/export (#150/#151).
 
 ➡️ **Next:** Phase 4 close (expiry + barcode + import/export), phir **Phase 5** — Customers + Suppliers + ledgers.
+
+
+### 2026-09-01 — Phase 7 MUKAMMAL ✅ (sales book + receipts + reprint)
+
+Phase 7 ke aakhri teen items. **POS + Sales + Payments + Customer Ledger — poora phase close.**
+
+**✅ JO HO GAYA:**
+
+**1) Sales book (#21) — aur "kis ki sales?" ka jawab**
+- `sales.view` bande ko **apni** sales dikhata hai; `sales.view_all` **sab ki**. Do permissions rakhne ka yehi maqsad hai: cashier ko wo receipt dhoondni hoti hai jo usne paanch minute pehle chhapi thi, usay poore hafte ka hisab dekhne ki zaroorat nahi.
+- Ye narrowing **query mein** hoti hai, view mein rows chhupa kar nahi — chhupi hui row bhi wo row hai jo fetch, paginate aur count ho chuki. Aur URL guess karne pe **404** milta hai (403 nahi: kisi aur ka invoice number uska masla hi nahi).
+- **Held sales book mein kabhi nahi aatin** — abhi kuch hua hi nahi, aur unhein asli sales ke saath ginna din ki takings ko barha kar dikhata.
+- Headline figures **usi filtered query** se ginte hain jo table dikhata hai, to cards aur table kabhi ikhtilaf nahi kar sakte.
+
+**2) Receipt (#23) — teenon widths ke liye AIK template**
+- 58mm aur 80mm thermal rolls hain; un mein farq **jagah** ka hai, matn ka nahi. A4 wo hai jo lifafe mein jata hai. Aik hi template share karne ka matlab: receipt **kya kehti hai** us mein tabdeeli aik width pe aa kar doosri se chup-chaap chhoot nahi sakti.
+- App layout se **bahar**, barcode sheet ki tarah: print job ko sidebar, topbar aur dark mode nahi chahiye. Roll pe monospace, dashed rules — jo thermal printer asal mein kaghaz pe daalta hai.
+- **Rounding alag line pe** dikhti hai, total ke andar dabai nahi jati — warna kaghaz pe receipt jama nahi hoti.
+- Split payment har method apni line pe (card ka AUTH reference sath), change, aur "On account" alag.
+
+**3) Reprint ginti jati hai (#143)**
+- Pehli print **reprint nahi** hai, to woh nahi ginti. Uske baad har copy pe likha aata hai **"REPRINT · copy N"**.
+- Wajah: aik hi jaisi do invoices gardish mein hona theek wohi cheez hai jis se #143 bachata hai — aur *"hamein nahi pata kitni copies hain"* koi jawab nahi.
+- Har reprint audit log mein bhi jata hai.
+
+**4) Print UX (#145)** — sale mukammal hone ke baad wahi teen cheezein jo chahiye hoti hain: **Print · New sale · View sale**. Receipt **apne tab** mein khulti hai to till kabhi navigate away nahi hoti — agla customer pehle se khara hai. Auto-print **opt-in** hai: jo dukaan sirf maangne pe chhapti hai us pe har sale ke baad print dialog phenkna theek nahi.
+
+**5) Custom footer (#144)** — `config/pos.php` se, aur Phase 11 mein per-business settings mein chala jayega (baqi sab ki tarah).
+
+**6) Void screen se (#198)** — reason lazmi, permission alag (`sales.void`), aur wo sab hota hai jo engine mein tay tha: stock wapas shelf pe, credit clear, **record baqi** — kyunke kisi ke paas kaghaz wali copy hai.
+
+**7) Profit permission hai (#52)** — list pe bhi aur sale pe bhi. Cashier ko sale poori nazar aati hai, margin nahi.
+
+**8) ⚠️ Tests — 15 naye, sab PASS**
+`Sales/SalesBookTest`: book totals, **held sales ghair-hazir**, cashier sirf apni dekhta hai (aur URL se bhi nahi khol sakta), view_all poori dukaan, date filter, **profit permission dono screens pe**, teenon receipt widths, ghalat width pe fallback, **custom footer**, **reprint ginti + "copy 2" marker + audit**, voided receipt pe VOIDED, void ki permission aur reason, plan gate, cross-tenant 404, credit sale pe "On account".
+
+**Result: `php artisan test` → 502 tests / 1,607 assertions PASS**.
+
+**9) Browser verification** — demo mein teen sales banai (cash with change, **card+cash split**, aur credit): sales book pe Takings **1,590.00**, On account **500.00**, har row pe profit + margin%. 80mm receipt pe split payment dono lines (card ka AUTH-77120 reference ke sath), 58mm pe credit sale ka **"On account 500.00"** aur **"REPRINT · copy 2"**. Zero console errors.
+
+**🐞 Rukawat:** beech mein MySQL band ho gaya tha (`mysql_error.log` ne "Server socket created" ke baad kuch nahi likha) — dobara start kar ke tests chalaye.
+
+➡️ **Next: Phase 8** — Returns + Stock Adjustments + Transfers (stock adjustments aur transfers Phase 4 mein ban chuke; ab **sale returns** asal kaam hai).
 
 
 ### 2026-08-29 — Phase 7 (Session 2): POS screen 🔄 (~75%)
@@ -969,14 +1012,14 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 - [x] Split payment (multi-method, must match total) — #19 *(`sale_payments` aik **table** hai, column nahi — har method alag reconcile hota hai; kam para hissa khaate pe jata hai, aur walk-in udhaar nahi le sakta)*
 
 ### Sales (`SaleService` — #184) ✅ *service mukammal — + `CashSessionService`; dono khud stock ya balance nahi likhte, `InventoryService` aur `CustomerLedgerService` ko call karte hain*
-- [ ] Sales listing + filters + actions — #21
+- [x] Sales listing + filters + actions — #21 *(`sales.view` = apni sales, `sales.view_all` = sab ki — narrowing **query mein**, view mein rows chhupa kar nahi; held sales book mein nahi aatin; cards usi filtered query se ginte hain)*
 - [x] Configurable invoice number format — #22 *(`{PREFIX}-{YYYY}{MM}-{SEQ:5}` tokens; scope business/branch/monthly; **held sale invoice number kharch nahi karti** — gap wo cheez hai jo inspector poochta hai)*
-- [ ] Invoice/receipt (80mm/58mm/A4, customizable) — #23
+- [x] Invoice/receipt (80mm/58mm/A4, customizable) — #23 *(teenon widths ke liye **aik template** — farq jagah ka hai, matn ka nahi; app layout se bahar; rounding alag line pe taake kaghaz pe jama ho)*
 - [x] **POS Sale DB transaction flow (16 steps, rollback on error)** — #118 *(solah steps `SaleService::complete()` ke docblock mein likhe hain; test sabit karta hai ke step 14 fail hone pe 9–13 bhi roll back hote hain)*
 - [x] Concurrency / stock race protection (locking) — #70 *(stock **transaction ke andar** `InventoryService` se jata hai jo shelf row pe `lockForUpdate` karta hai — wahi lock poori protection hai)*
-- [ ] Print UX (Print/New Sale/View, auto-print option) — #145
-- [ ] Invoice reprint (+ audit) — #143
-- [ ] Custom receipt footer — #144
+- [x] Print UX (Print/New Sale/View, auto-print option) — #145 *(receipt **apne tab** mein khulti hai to till navigate away nahi hoti; auto-print **opt-in**)*
+- [x] Invoice reprint (+ audit) — #143 *(pehli print reprint nahi hai; uske baad har copy pe **"REPRINT · copy N"** aur audit log — "hamein nahi pata kitni copies hain" koi jawab nahi)*
+- [x] Custom receipt footer — #144 *(`config/pos.php` se; Phase 11 mein per-business settings mein jayega)*
 
 ### Cash Register
 - [x] POS session link (open/close register) — #139 *(aik counter pe aik hi open session — MySQL mein partial unique index nahi hota, is liye check transaction mein lock ke saath)*
@@ -1101,7 +1144,7 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 - [x] Feature tests: Subscription Expiry — #116 *(`Subscription/SubscriptionExpiryTest` 26 + `Subscription/SubscriptionGateTest` 22 — trial/grace/expiry, lock vs read-only vs pos-off, stale status column dono taraf se)*
 - [x] ⚠️ Tenant leak test (Business A → Business B URL = 403/404) — #117 *(cross-tenant PK `find()` → null; dashboard HTTP test dono tenants pe; request input se tenant switch block)*
 
-> **Ab tak ka test status:** `php artisan test` → **487 tests / 1,548 assertions PASS** (MySQL `pos_saas_test`) — Auth 22 · PasswordReset 11 · TenantIsolation 20 · PlanLimit 29 · PlanFeature 21 · SubscriptionExpiry 26 · SubscriptionGate 22 · RolePermission 31 · BranchAccess 19 · Employee 20 · Catalog 23 · Product 24 · Inventory 31 · StockTransfer 22 · BatchExpiry 17 · CatalogTools 22 · PartyLedger 26 · PartyAccess 15 · Purchase 26 · PurchaseAccess 12 · SaleEngine 28 · PosScreen 19 · Unit 1. Har naye phase ke saath yahan tests barhte rahenge.
+> **Ab tak ka test status:** `php artisan test` → **502 tests / 1,607 assertions PASS** (MySQL `pos_saas_test`) — Auth 22 · PasswordReset 11 · TenantIsolation 20 · PlanLimit 29 · PlanFeature 21 · SubscriptionExpiry 26 · SubscriptionGate 22 · RolePermission 31 · BranchAccess 19 · Employee 20 · Catalog 23 · Product 24 · Inventory 31 · StockTransfer 22 · BatchExpiry 17 · CatalogTools 22 · PartyLedger 26 · PartyAccess 15 · Purchase 26 · PurchaseAccess 12 · SaleEngine 28 · PosScreen 19 · SalesBook 15 · Unit 1. Har naye phase ke saath yahan tests barhte rahenge.
 
 ---
 
