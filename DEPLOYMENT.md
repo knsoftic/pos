@@ -73,13 +73,30 @@ application ke liye ghalat. Ye teen list se nikaal dein:
 | Function | Iske bagair kya tootta hai |
 |---|---|
 | `proc_open` | `pos:backup` — ye `mysqldump` ko Symfony Process se chalata hai. Composer ko bhi chahiye. |
+| `proc_get_status` | Isi ke saath. ⚠️ **Sirf `proc_open` kholna kaafi nahi** — Symfony Process dono maangta hai, aur adhoora kholne par backup phir bhi fail hota hai bina ye bataye ke kyun. |
 | `symlink` | `php artisan storage:link` — product images aur uploaded receipts hamesha 404 dete rahenge. |
-| `putenv` | Composer, aur wo sab jo runtime par env parhta hai. |
+| `readlink` | Composer, aur Laravel jab mojooda storage link check karta hai. |
+| `putenv` | Composer, aur wo sab jo runtime par env parhta hai (agar list mein mojood ho). |
 
-Baqi list ko haath na lagayen. `exec` aur `shell_exec` ki zaroorat **nahi** — ye
-application unhein kabhi call nahi karti, aur unhein kholne ki koi wajah nahi.
+**Baqi list ko haath na lagayen.** Ye application inhein kabhi call nahi karti,
+aur kholna sirf hamla-aawar ke liye darwaza khola hai:
+
+```
+exec  shell_exec  system  passthru  popen  chroot  chown  chgrp
+dl    openlog     syslog  pcntl_*   imap_*
+```
 
 Phir PHP restart karein: *App Store → PHP 8.2 → Service → Restart*.
+
+Ab tasdeeq kar lein — ye batata hai ke kaunsa abhi bhi band hai:
+
+```bash
+/www/server/php/82/bin/php -r 'foreach (["proc_open","proc_get_status","proc_close","symlink","readlink","putenv"] as $f) printf("%-18s %s
+", $f, function_exists($f) ? "OK" : "BAND HAI");'
+```
+
+Sab `OK` aana chahiye. `disable_functions` CLI aur FPM dono par lagta hai, is
+liye yehi check cron wale `pos:backup` ke liye bhi kaafi hai.
 
 ---
 
