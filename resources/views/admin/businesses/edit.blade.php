@@ -33,7 +33,7 @@
         </p>
 
         <form method="POST" action="{{ route('admin.businesses.destroy', $business) }}" class="mt-4"
-              onsubmit="return confirm('Archive &quot;{{ $business->name }}&quot;? All of its data is retained and it can be restored later.');">
+              data-confirm="Archive &quot;{{ $business->name }}&quot;? All of its data is retained and it can be restored later.">
             @csrf
             @method('DELETE')
             <button type="submit" class="btn btn-danger">

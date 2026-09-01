@@ -347,7 +347,7 @@
                                     </form>
                                 @else
                                     <form method="POST" action="{{ route('admin.businesses.subscription.cancel', $business) }}"
-                                          onsubmit="return confirm('Cancel the subscription for &quot;{{ $business->name }}&quot;? Access stops immediately.');">
+                                          data-confirm="Cancel the subscription for &quot;{{ $business->name }}&quot;? Access stops immediately.">
                                         @csrf
                                         <p class="mb-3 text-sm text-slate-600 dark:text-slate-400">
                                             Access stops immediately. The row is kept for history and the cancellation
@@ -377,7 +377,7 @@
                             </summary>
                             <form method="POST" action="{{ route('admin.businesses.suspend', $business) }}"
                                   class="border-t border-slate-100 p-3 dark:border-slate-800"
-                                  onsubmit="return confirm('Suspend &quot;{{ $business->name }}&quot;? Its users are signed out on their next request.');">
+                                  data-confirm="Suspend &quot;{{ $business->name }}&quot;? Its users are signed out on their next request.">
                                 @csrf
                                 <p class="mb-3 text-sm text-slate-600 dark:text-slate-400">
                                     Blocks every user of this tenant, independently of the subscription. Already
@@ -620,7 +620,7 @@
                                         </button>
                                     </form>
                                     <form method="POST" action="{{ route('admin.businesses.notes.destroy', [$business, $note]) }}"
-                                          onsubmit="return confirm('Delete this note?');">
+                                          data-confirm="Delete this note?">
                                         @csrf
                                         @method('DELETE')
                                         <button type="submit" class="btn btn-ghost !px-2 !py-1 text-rose-600" title="Delete">

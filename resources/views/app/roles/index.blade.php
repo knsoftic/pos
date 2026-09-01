@@ -75,7 +75,7 @@
 
                     @if ($role->canBeDeleted())
                         <form method="POST" action="{{ route('app.roles.destroy', $role) }}"
-                              onsubmit="return confirm('Delete the role &quot;{{ $role->name }}&quot;?');">
+                              data-confirm="Delete the role &quot;{{ $role->name }}&quot;?">
                             @csrf
                             @method('DELETE')
                             <button type="submit" class="btn btn-ghost !px-2 text-rose-600 dark:text-rose-400" title="Delete role">

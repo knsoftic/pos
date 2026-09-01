@@ -7,6 +7,7 @@ use App\Models\Setting;
 use App\Support\SettingRegistry;
 use App\Support\TenantContext;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -97,10 +98,32 @@ class SettingsService
             return $this->defaults();
         }
 
-        return $this->cache[$businessId] ??= array_merge(
-            $this->defaults(),
-            $this->overridesFor($businessId),
-        );
+        if (array_key_exists($businessId, $this->cache)) {
+            return $this->cache[$businessId];
+        }
+
+        /*
+        | Cached across requests, not just memoised within one (#96, #168).
+        |
+        | `apply()` runs on EVERY tenant request, so without this the overlay
+        | costs a query per page for a table that changes perhaps twice a year.
+        |
+        | ⚠️ Unlike an entitlement, a stale SETTING is a display bug rather than
+        | a security one — the worst case is a receipt footer being a minute out
+        | of date. It is still flushed on every write (see `put()` and
+        | `forget()`), because "a minute" is not a promise anybody should have to
+        | explain to a shopkeeper who just pressed Save.
+        */
+        $ttl = (int) config('subscription.cache_ttl');
+
+        $resolved = $ttl > 0
+            ? Cache::remember($this->cacheKey($businessId), $ttl, fn () => array_merge(
+                $this->defaults(),
+                $this->overridesFor($businessId),
+            ))
+            : array_merge($this->defaults(), $this->overridesFor($businessId));
+
+        return $this->cache[$businessId] = $resolved;
     }
 
     public function get(string $key, int|Business|null $business = null): mixed
@@ -211,6 +234,13 @@ class SettingsService
             ->all();
     }
 
+    /**
+     * Drop the resolved map.
+     *
+     * MUST be called after any settings write — the overlay is what every other
+     * service reads, so a stale entry here is a shop operating on a value it
+     * has already changed.
+     */
     public function flush(int|Business|null $business = null): void
     {
         $businessId = $this->resolveBusinessId($business);
@@ -222,6 +252,21 @@ class SettingsService
         }
 
         unset($this->cache[$businessId]);
+        Cache::forget($this->cacheKey($businessId));
+    }
+
+    /**
+     * The cache key.
+     *
+     * ⚠️ Versioned by the REGISTRY, not just the business. Shipping a release
+     * that adds or renames a setting would otherwise leave every tenant reading
+     * a cached map that predates it, with the new key simply missing — and the
+     * bug would look like "the new setting does nothing" for as long as the TTL
+     * lasts.
+     */
+    protected function cacheKey(int $businessId): string
+    {
+        return sprintf('settings.%d.%s', $businessId, substr(md5(implode('|', SettingRegistry::keys())), 0, 8));
     }
 
     // ------------------------------------------------------------- internals

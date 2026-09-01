@@ -217,6 +217,8 @@
         </footer>
     </div>
 
+    <x-confirm-dialog />
+
     @livewireScripts
     @stack('scripts')
 </body>

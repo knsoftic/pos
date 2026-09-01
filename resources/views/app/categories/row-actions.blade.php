@@ -6,7 +6,7 @@
 
     @if ($category->canBeDeleted())
         <form method="POST" action="{{ route('app.categories.destroy', $category) }}"
-              onsubmit="return confirm('Delete {{ $category->name }}?');">
+              data-confirm="Delete {{ $category->name }}?">
             @csrf
             @method('DELETE')
             <button type="submit" class="btn btn-ghost !px-2 text-rose-600 dark:text-rose-400" title="Delete">

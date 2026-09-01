@@ -167,7 +167,7 @@
                                     @endcan
                                     @can(\App\Support\PermissionRegistry::PRODUCTS_DELETE)
                                         <form method="POST" action="{{ route('app.products.destroy', $product) }}"
-                                              onsubmit="return confirm('Delete this product? Anything with history is kept and archived instead.');">
+                                              data-confirm="Delete this product? Anything with history is kept and archived instead.">
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="btn btn-ghost !px-2 text-rose-600 dark:text-rose-400" title="Delete">

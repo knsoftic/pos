@@ -82,7 +82,7 @@
 
                                         @unless ($employee->isOwner() || $employee->id === auth()->id())
                                             <form method="POST" action="{{ route('app.employees.reset-password', $employee) }}"
-                                                  onsubmit="return confirm('Generate a new password for {{ $employee->name }}?');">
+                                                  data-confirm="Generate a new password for {{ $employee->name }}?">
                                                 @csrf
                                                 <button type="submit" class="btn btn-ghost !px-2" title="Reset password">
                                                     <x-icon name="key" class="h-4 w-4" />
@@ -97,7 +97,7 @@
                                             </form>
 
                                             <form method="POST" action="{{ route('app.employees.destroy', $employee) }}"
-                                                  onsubmit="return confirm('Remove {{ $employee->name }}? Their past work stays on record.');">
+                                                  data-confirm="Remove {{ $employee->name }}? Their past work stays on record.">
                                                 @csrf
                                                 @method('DELETE')
                                                 <button type="submit" class="btn btn-ghost !px-2 text-rose-600 dark:text-rose-400" title="Remove">

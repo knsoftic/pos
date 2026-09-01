@@ -100,7 +100,7 @@
 
                                     @if ($branch->canBeDeleted())
                                         <form method="POST" action="{{ route('app.branches.destroy', $branch) }}"
-                                              onsubmit="return confirm('Delete {{ $branch->name }}?');">
+                                              data-confirm="Delete {{ $branch->name }}?">
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="btn btn-ghost !px-2 text-rose-600 dark:text-rose-400" title="Delete">

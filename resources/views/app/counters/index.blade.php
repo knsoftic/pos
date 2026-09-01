@@ -80,7 +80,7 @@
 
                                     @if ($counter->canBeDeleted())
                                         <form method="POST" action="{{ route('app.counters.destroy', $counter) }}"
-                                              onsubmit="return confirm('Delete {{ $counter->name }}?');">
+                                              data-confirm="Delete {{ $counter->name }}?">
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="btn btn-ghost !px-2 text-rose-600 dark:text-rose-400" title="Delete">

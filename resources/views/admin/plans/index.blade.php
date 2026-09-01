@@ -93,7 +93,7 @@
                     {{-- Archive, not delete. Refused server-side while anyone is
                          still subscribed. #104 --}}
                     <form method="POST" action="{{ route('admin.plans.destroy', $plan) }}"
-                          onsubmit="return confirm('Archive &quot;{{ $plan->name }}&quot;? It stays in the database and existing subscriptions keep working.');">
+                          data-confirm="Archive &quot;{{ $plan->name }}&quot;? It stays in the database and existing subscriptions keep working.">
                         @csrf @method('DELETE')
                         <button type="submit" class="btn btn-ghost text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10" title="Archive">
                             <x-icon name="archive" class="h-4 w-4" />

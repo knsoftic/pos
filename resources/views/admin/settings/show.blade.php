@@ -130,7 +130,7 @@
             {{-- Sibling forms, never nested: a browser drops an inner <form>. --}}
             <div class="flex flex-wrap items-center justify-end gap-2">
                 <form method="POST" action="{{ route('admin.settings.reset', $group) }}"
-                      onsubmit="return confirm('Put this page back to the shipped defaults?')">
+                      data-confirm="Put this page back to the shipped defaults?">
                     @csrf
                     <button type="submit" class="btn btn-ghost">
                         <x-icon name="refresh" class="h-4 w-4" /> Back to defaults

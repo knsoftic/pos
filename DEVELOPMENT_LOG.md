@@ -16,7 +16,7 @@
 | **Environment** | Windows 11 + XAMPP (PHP + MySQL/MariaDB) |
 | **Start Date** | 2026-08-25 |
 | **Demo logins** | [LOGIN_CREDENTIALS.md](LOGIN_CREDENTIALS.md) — seeded accounts (dev only, #191) |
-| **Current Status** | 🔄 **Phase 13 chal raha hai (~65%)** — Session 1 (jo nazar aata hai): asli **owner dashboard** (#12) quick actions (#123) + activity feed (#124), **global search** (#75), toasts (#165/#166), **Light/Dark/System** theme (#74), breadcrumbs (#164), motion + reduced-motion (#73). **Phases 0–12 mukammal.** **679 tests / 2,664 assertions pass**. ➡️ **Next: Phase 13 session 2** — onboarding wizard (#86), confirm dialogs (#92), caching (#96/#168), query audit (#97/#167), queue (#171), scheduler (#169/#170). |
+| **Current Status** | ✅ **Phase 13 MUKAMMAL** (sirf onboarding wizard #86 baqi) — Session 1 (jo nazar aata hai): dashboard (#12/#123/#124), global search (#75), toasts (#165/#166), Light/Dark/System (#74), breadcrumbs (#164), motion (#73). Session 2 (jo nazar nahi aata): **settings caching** (#96/#168), **query budget test** (#97/#167), **scheduler** — `pos:expire-holds` / `pos:check-integrity` / `pos:prune` (#169/#170/#171), **styled confirm dialog** (#92, 23 native `confirm()` khatam). **Phases 0–13 mukammal.** **693 tests / 2,726 assertions pass**. ➡️ **Next: Phase 14** — Security + Testing (#93–94, #100–101, #116–117, #133, #197–198). |
 
 ---
 
@@ -61,7 +61,56 @@
 > Naya kaam upar add karo (newest first). Har entry mein: **date**, **kya hua**, **kya next hai**.
 
 
-### 2026-09-01 — Phase 13 (Session 1) 🔄 — jo nazar aata hai
+### 2026-09-01 — Phase 13 (Session 2) ✅ — jo nazar nahi aata
+
+Session 1 wo tha jo user dekhta hai. Ye wo hai jo **koi nahi dekhta jab tak theek chal raha ho** — aur jis din nazar aata hai, us din dukaan band hoti hai.
+
+**✅ JO HO GAYA:**
+
+**1) Settings ab har request pe DB se nahi aati (#96, #168)**
+- Har page load pe `settings` table ki query chal rahi thi, sirf is liye ke config overlay lag sake. Aik dukaan pe kuch nahi, hazaar dukaano pe wo query **har single request** pe hai.
+- Ab `Cache::remember` — magar asal cheez **key** hai:
+  ```php
+  return sprintf('settings.%d.%s', $businessId, substr(md5(implode('|', SettingRegistry::keys())), 0, 8));
+  ```
+- Key mein registry ka **hash** hai. Matlab jis din koi nayi setting add hoti hai, key khud badal jati hai aur purana cache **khud** mar jata hai. Deploy ke baad `cache:clear` bhoolna ab bug nahi banta — aur ye bhoolna hamesha hota hai.
+- `put()` / `forget()` dono cache uraate hain aur overlay **dobara** lagate hain, warna wohi request purani value ke saath chalti rehti.
+
+**2) Teen scheduled commands — teeno "pehle batao, phir karo" (#169, #170)**
+- **`pos:expire-holds {--dry-run}`** — puraane held sales hataata hai. Har dukaan ke andar `TenantContext::runFor` se chalta hai, **taake har dukaan ka apna `pos.hold_expiry_hours` lage** — 24 ghante wali bakery aur 72 ghante wali furniture shop aik hi cron pe hain, magar aik jaisa nahi.
+  - Ye **wahid destructive job** hai aur mehfooz sirf is liye hai ke **hold ne kuch post kiya hi nahi tha** — na stock hila, na ledger. Test isi ko pin karta hai: hold urne ke baad stock bilkul wohi.
+- **`pos:check-integrity {--repair} {--business=}`** — cached column vs ledger. Stock, customer balance, supplier balance, cash session.
+  - **Bina `--repair` ke ye sirf batata hai — aur exit FAILURE deta hai.** Chup-chaap theek kar dena **saboot mita dena** hai: agar stock roz drift kar raha hai to asal masla wo code hai jo drift paida kar raha hai, wo number nahi jo aaj ghalat hai. Pehle nazar aana chahiye.
+- **`pos:prune {--days=} {--dry-run}`** — puraana audit trail aur orphan uploads.
+  - **30 din se chhoti window pe refuse kar deta hai.** `--days=1` taqreeban hamesha typo hota hai aur ye command apna kiya wapis nahi le sakti.
+  - **Kuch bhi financial kabhi nahi chhoota (#133, #198)** — sales, movements, ledgers, payments. Ye line test mein alag se likhi hui hai, comment ke saath, taake koi baad mein "cleanup" ke naam pe cross na kar de.
+- Teeno `withoutOverlapping()` + `onOneServer()`; bhaari do `runInBackground()` (#171). Do web servers wali deployment pe har nightly job **do baar** chalna default behaviour hai — aur integrity sweep do baar apni hi outage hai.
+- Aik test **poore schedule pe loop** karta hai aur dono flags maangta hai. Kal koi chautha command add kare aur bhool jaye, test wahin rok dega.
+
+**3) Query budget test (#97, #167)**
+- N+1 ko **constant se nahi, shakl se** pakra jata hai. `assertFlat()` do cheezein maangta hai: aik ceiling, aur ye ke **3 rows se 18 rows par jaane pe query count na barhe**.
+- Constant wala test har refactor pe tootta hai aur log usay barha dete hain jab tak wo bemaani na ho jaye. Shape wala test sirf tab tootta hai jab **waqai** N+1 wapis aaya ho.
+
+**4) Styled confirm dialog (#92)**
+- **Aik** shared `<x-confirm-dialog>`, aur aik global capture-phase `submit` listener `form[data-confirm]` pe (`dataset.confirmed` re-entry guard ke saath).
+- Is design ki wajah: 23 jagah convert karna aik **attribute** badalne ka kaam ban gaya — `onsubmit="return confirm(...)"` → `data-confirm="..."`. Agar har jagah apna modal likhna parta to aadhi jagah reh jati.
+- Focus **Cancel** pe girta hai. Jo dialog "Delete" pe focus le kar khulta hai, wo Enter dabane wale ko wohi karwa deta hai jis se rokne ke liye dialog bana tha.
+
+**⚠️ Tests — 14 naye, sab PASS**
+- `Performance/QueryBudgetTest` (5): products/customers/sales listing flat · dashboard flat · POS search flat.
+- `Performance/ScheduledTasksTest` (9): staale hold gaya, fresh bacha, **stock ko haath nahi laga** · hold window dukaan ki apni setting hai · `--dry-run` kuch nahi badalta · saaf dukaan reconcile · **drift pakra gaya, report hua (exit FAILURE), aur sirf `--repair` pe theek hua** · customer balance drift · prune ne audit trail liya aur **financial kuch nahi** · prune ne 1-din window refuse ki · har scheduled event `onOneServer` + `withoutOverlapping`.
+- **Result: `php artisan test` → 693 tests / 2,726 assertions PASS**
+
+**✅ Browser verification**
+- `/app/expenses` pe delete: styled dialog — *"Delete EXP-000001? The cash it took out of the till goes back."* + Cancel / Yes, continue. Focus Cancel pe.
+- `php artisan schedule:list` → 4 tasks, sab expected time pe.
+
+**⬜ Phase 13 mein baqi:** sirf **onboarding wizard (#86)**. Dashboard wali "getting set up" checklist iska aadha maqsad pura karti hai (nayi dukaan ko rasta dikhati hai aur khud khatam ho jati hai); 6-step wizard alag kaam hai.
+
+➡️ **Next: Phase 14** — Security + Testing (#93–94, #100–101, #116–117, #133, #197–198).
+
+
+### 2026-09-01 — Phase 13 (Session 1) ✅ — jo nazar aata hai
 
 Phase 13 ke do hisse: **jo user dekhta hai** aur **jo nazar nahi aata** (caching, queue, scheduler). Ye pehla hissa.
 
@@ -1464,7 +1513,7 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 - [x] Global search (product/customer/supplier/invoice) — #75 *(har source apni permission ke peeche; prefix match, koi leading wildcard nahi)*
 - [ ] Onboarding wizard (6 steps) — #86 *(dashboard pe setup checklist ban gayi; wizard baqi)*
 - [x] Empty states — #87 *(har list ka apna; plus naye tenant ke liye "getting set up" list jo khud khatam ho jati hai)*
-- [ ] Confirmation dialogs (delete/cancel/return/suspend) — #92 *(abhi native `confirm()`; styled component baqi)*
+- [x] Confirmation dialogs (delete/cancel/return/suspend) — #92 *(aik shared `<x-confirm-dialog>`; 23 native `confirm()` khatam, ab sirf `data-confirm="..."`)*
 - [x] Dashboard quick actions — #123
 - [x] Recent activity widgets — #124
 - [x] Responsive design (desktop-first, mobile-friendly) — #71, #163
@@ -1474,10 +1523,10 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 - [x] Plan-based navigation (feature-hidden menus) — #13, #125 *(Phase 3 se; nav feature + permission dono se filter hota hai)*
 
 ### Performance
-- [ ] Caching (plan features, settings, categories, permissions) + invalidation — #96, #168
-- [ ] Large data optimization (pagination, indexing, eager loading) — #97, #167
-- [ ] Queue-ready heavy actions — #171
-- [ ] Laravel Scheduler tasks (expiry, grace, reminders, cleanup) — #169, #170
+- [x] Caching (plan features, settings, categories, permissions) + invalidation — #96, #168 *(settings ab cross-request cached, key registry ke hash se versioned — deploy khud invalidate karta hai)*
+- [x] Large data optimization (pagination, indexing, eager loading) — #97, #167 *(`QueryBudgetTest` N+1 ko **shakl** se pakarta hai: 3 rows vs 18 rows, count barhna nahi chahiye)*
+- [x] Queue-ready heavy actions — #171 *(bhaari scheduled kaam `runInBackground()` + `withoutOverlapping()` + `onOneServer()`)*
+- [x] Laravel Scheduler tasks (expiry, grace, reminders, cleanup) — #169, #170 *(`pos:expire-holds` · `pos:check-integrity` · `pos:prune` — teeno `--dry-run` ya report-pehle)*
 
 ---
 

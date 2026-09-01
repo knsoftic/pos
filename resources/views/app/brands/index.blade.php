@@ -52,7 +52,7 @@
                                     </a>
                                     @if ($brand->canBeDeleted())
                                         <form method="POST" action="{{ route('app.brands.destroy', $brand) }}"
-                                              onsubmit="return confirm('Delete this brand?');">
+                                              data-confirm="Delete this brand?">
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="btn btn-ghost !px-2 text-rose-600 dark:text-rose-400" title="Delete">

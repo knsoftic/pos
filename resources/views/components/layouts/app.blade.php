@@ -570,6 +570,8 @@
         }
     </script>
 
+    <x-confirm-dialog />
+
     @livewireScripts
     @stack('scripts')
 </body>

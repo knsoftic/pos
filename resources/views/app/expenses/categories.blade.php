@@ -123,7 +123,7 @@
 
                                         @if ($category->canBeDeleted())
                                             <form method="POST" action="{{ route('app.expense-categories.destroy', $category) }}"
-                                                  onsubmit="return confirm('Delete &quot;{{ $category->name }}&quot;?')">
+                                                  data-confirm="Delete &quot;{{ $category->name }}&quot;?">
                                                 @csrf @method('DELETE')
                                                 <button type="submit"
                                                         class="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"

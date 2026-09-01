@@ -188,7 +188,7 @@
                                                         <x-icon name="pencil" class="h-4 w-4" />
                                                     </button>
                                                     <form method="POST" action="{{ route('app.tax-rates.destroy', $rate) }}"
-                                                          onsubmit="return confirm('Remove &quot;{{ $rate->name }}&quot;? Invoices already printed keep their rate.')">
+                                                          data-confirm="Remove &quot;{{ $rate->name }}&quot;? Invoices already printed keep their rate.">
                                                         @csrf @method('DELETE')
                                                         <button type="submit"
                                                                 class="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"
@@ -340,7 +340,7 @@
 
                 <div class="flex flex-wrap items-center justify-end gap-2">
                     <form method="POST" action="{{ route('app.settings.reset', $group) }}"
-                          onsubmit="return confirm('Put this page back to the shipped defaults?')">
+                          data-confirm="Put this page back to the shipped defaults?">
                         @csrf
                         <button type="submit" class="btn btn-ghost">
                             <x-icon name="refresh" class="h-4 w-4" /> Back to defaults

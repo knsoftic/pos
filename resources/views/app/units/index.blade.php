@@ -71,7 +71,7 @@
                                     </a>
                                     @if ($unit->canBeDeleted())
                                         <form method="POST" action="{{ route('app.units.destroy', $unit) }}"
-                                              onsubmit="return confirm('Delete this unit?');">
+                                              data-confirm="Delete this unit?">
                                             @csrf
                                             @method('DELETE')
                                             <button type="submit" class="btn btn-ghost !px-2 text-rose-600 dark:text-rose-400" title="Delete">

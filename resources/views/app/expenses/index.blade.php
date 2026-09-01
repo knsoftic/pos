@@ -150,7 +150,7 @@
                                             <x-icon name="pencil" class="h-4 w-4" />
                                         </a>
                                         <form method="POST" action="{{ route('app.expenses.destroy', $expense) }}"
-                                              onsubmit="return confirm('Delete {{ $expense->reference }}? The cash it took out of the till goes back.')">
+                                              data-confirm="Delete {{ $expense->reference }}? The cash it took out of the till goes back.">
                                             @csrf @method('DELETE')
                                             <button type="submit"
                                                     class="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10 dark:hover:text-rose-400"

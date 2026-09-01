@@ -111,7 +111,7 @@
                                     <x-icon name="pencil" class="h-4 w-4" />
                                 </button>
                                 <form method="POST" action="{{ route('admin.announcements.destroy', $announcement) }}"
-                                      onsubmit="return confirm('Delete this announcement? Switching it off is usually what you want.')">
+                                      data-confirm="Delete this announcement? Switching it off is usually what you want.">
                                     @csrf @method('DELETE')
                                     <button type="submit"
                                             class="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"

@@ -121,7 +121,7 @@
 
                     @if ($canSend)
                         <form method="POST" action="{{ route('app.transfers.send', $transfer) }}"
-                              onsubmit="return confirm('Send this transfer? The stock leaves {{ $transfer->fromBranch?->name }} now.');">
+                              data-confirm="Send this transfer? The stock leaves {{ $transfer->fromBranch?->name }} now.">
                             @csrf
                             <button type="submit" class="btn btn-primary w-full">
                                 <x-icon name="arrow-right" class="h-4 w-4" /> Send the goods
@@ -147,7 +147,7 @@
 
                     @if ($transfer->canBeDeleted())
                         <form method="POST" action="{{ route('app.transfers.destroy', $transfer) }}"
-                              onsubmit="return confirm('Delete this draft?');">
+                              data-confirm="Delete this draft?">
                             @csrf
                             @method('DELETE')
                             <button type="submit" class="btn btn-ghost w-full text-rose-600 dark:text-rose-400">
