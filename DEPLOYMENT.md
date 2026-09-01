@@ -1,32 +1,33 @@
-# Deploying KN Softic POS on aaPanel
+# pos.knbazaar.com ko aaPanel par live karna
 
 **Target:** `pos.knbazaar.com` → `/www/wwwroot/pos.knbazaar.com`
 
-This is a runbook, not an overview. Work top to bottom. The last step,
-`pos:preflight`, is the one that tells you whether the rest actually worked —
-do not skip it because everything "looks fine".
+Ye runbook hai, tafseel nahi. Upar se neeche isi tarteeb mein chalein. Aakhri
+step — `pos:preflight` — wo hai jo aap ko batata hai ke baqi sab waqai kaam kar
+gaya ya nahi. Sab theek "lag raha ho" tab bhi isay skip na karein.
 
-> **Menu names vary.** aaPanel renames things between versions and languages.
-> Where a label here does not match your panel, the path in *italics* describes
-> what you are looking for.
+> **Menu ke naam badalte rehte hain.** aaPanel version aur zaban ke hisab se
+> labels change karta hai. Jahan yahan likha label aap ke panel se match na
+> kare, wahan *italic* mein diya rasta batata hai ke aap kis cheez ko dhoond
+> rahe hain.
 
 ---
 
-## ⚠️ Read this before you start
+## ⚠️ Shuru karne se pehle ye parh lein
 
-Three things about aaPanel specifically will waste your day if you meet them by
-surprise. All three are covered in the steps below; they are here so you
-recognise them when they bite.
+aaPanel ki teen khaas cheezein aap ka din kha jayengi agar achanak saamne
+aayen. Teeno neeche ke steps mein handle ho chuki hain; yahan is liye likhi
+hain ke aap unhein **pehchan** lein, debug karte na reh jayen.
 
-| What you will see | What it actually is |
+| Aap ko kya dikhega | Asal mein kya hai |
 |---|---|
-| The site loads but has **no styling at all** — plain text, no colours | `public/build` is not in git. A clone has no compiled assets. **Step 6.** |
-| `php artisan pos:backup` fails, or `storage:link` does nothing | aaPanel disables `proc_open`, `symlink` and `putenv` in PHP by default. **Step 3.** |
-| Every URL except the home page returns **404** | The site's run directory is not `/public`, or the rewrite rules are missing. **Step 5.** |
+| Site khulti hai magar **bilkul styling nahi** — plain text, koi rang nahi | `public/build` git mein hai hi nahi. Fresh clone ke paas compiled assets nahi hote. **Step 6.** |
+| `php artisan pos:backup` fail, ya `storage:link` chup-chaap kuch nahi karta | aaPanel default par `proc_open`, `symlink` aur `putenv` band rakhta hai. **Step 3.** |
+| Home page ke ilawa **har URL 404** | Run directory `/public` nahi hai, ya rewrite rules nahi lage. **Step 5.** |
 
 ---
 
-## 1. Create the site
+## 1. Site banayein
 
 *Website → Add site*
 
@@ -34,103 +35,103 @@ recognise them when they bite.
 |---|---|
 | Domain | `pos.knbazaar.com` |
 | Root directory | `/www/wwwroot/pos.knbazaar.com` |
-| PHP version | **8.2 or newer** |
-| Database | MySQL — tick it and let aaPanel create one |
+| PHP version | **8.2 ya us se naya** |
+| Database | MySQL — tick kar dein, aaPanel khud bana dega |
 
-Write down the database name, user and password it generates. You need them in
-step 4 and nowhere else.
+Jo database ka naam, user aur password wo generate kare, wo likh lein. Un ki
+zaroorat step 4 mein hai aur kahin nahi.
 
 ---
 
-## 2. Install PHP and its extensions
+## 2. PHP aur uski extensions install karein
 
 *App Store → PHP 8.2 → Settings → Install extensions*
 
-Laravel's usual set, plus two this app specifically needs:
+Laravel ka aam set, aur do jo khaas is app ko chahiye:
 
 ```
 bcmath  ctype  curl  dom  fileinfo  json  mbstring  openssl
 pcre    pdo    pdo_mysql  tokenizer  xml  zip  gd
 ```
 
-- **`zip`** — `pos:backup` builds the archive with `ZipArchive`, and the `.xlsx`
-  report exporter writes a spreadsheet by hand as a ZIP of XML parts. Without
-  it, both fail.
-- **`gd`** — product image validation decodes the file to prove it really is an
-  image (that is how a PHP script renamed `.jpg` gets refused).
+- **`zip`** — `pos:backup` apna archive `ZipArchive` se banata hai, aur `.xlsx`
+  report exporter spreadsheet ko haath se XML parts ki ZIP ki tarah likhta hai.
+  Iske bagair dono fail hote hain.
+- **`gd`** — product image validation file ko decode kar ke sabit karti hai ke
+  wo waqai tasveer hai. Isi tarah `.jpg` naam wali PHP script refuse hoti hai.
 
 ---
 
-## 3. Un-disable the functions aaPanel blocks
+## 3. Jo functions aaPanel ne band kar rakhe hain, wo kholein
 
 *App Store → PHP 8.2 → Settings → Disabled functions*
 
-**This is the step people skip.** aaPanel ships a `disable_functions` list that
-is sensible for shared WordPress hosting and wrong for a Laravel application.
-Remove these three from the list:
+**Yehi wo step hai jo log skip kar dete hain.** aaPanel aik `disable_functions`
+list ke saath aata hai jo shared WordPress hosting ke liye theek hai aur Laravel
+application ke liye ghalat. Ye teen list se nikaal dein:
 
-| Function | What breaks without it |
+| Function | Iske bagair kya tootta hai |
 |---|---|
-| `proc_open` | `pos:backup` — it runs `mysqldump` through Symfony Process. Composer also wants it. |
-| `symlink` | `php artisan storage:link` — product images and uploaded receipts 404 forever. |
-| `putenv` | Composer, and anything reading env at runtime. |
+| `proc_open` | `pos:backup` — ye `mysqldump` ko Symfony Process se chalata hai. Composer ko bhi chahiye. |
+| `symlink` | `php artisan storage:link` — product images aur uploaded receipts hamesha 404 dete rahenge. |
+| `putenv` | Composer, aur wo sab jo runtime par env parhta hai. |
 
-Leave the rest of the list alone. `exec` and `shell_exec` are **not** needed —
-this application never calls them, and there is no reason to open them.
+Baqi list ko haath na lagayen. `exec` aur `shell_exec` ki zaroorat **nahi** — ye
+application unhein kabhi call nahi karti, aur unhein kholne ki koi wajah nahi.
 
-After saving, restart PHP: *App Store → PHP 8.2 → Service → Restart*.
+Phir PHP restart karein: *App Store → PHP 8.2 → Service → Restart*.
 
 ---
 
-## 4. Get the code and configure it
+## 4. Code lein aur configure karein
 
-SSH in as root.
+SSH se root ban kar andar aayen.
 
 ```bash
 cd /www/wwwroot/pos.knbazaar.com
-rm -rf .user.ini index.html 404.html          # aaPanel's placeholder files
+rm -rf .user.ini index.html 404.html          # aaPanel ki placeholder files
 git clone https://github.com/knsoftic/pos.git .
 ```
 
-Everything below uses the aaPanel PHP binary explicitly, because the system
-`php` on the box is often a different, older one:
+Neeche har jagah aaPanel wali PHP binary ka poora rasta likha hai, kyunke box
+par system ka `php` aksar koi aur, purana version hota hai:
 
 ```bash
 PHP=/www/server/php/82/bin/php
 $PHP -v
 ```
 
-Install dependencies **without** dev packages:
+Dependencies, **dev packages ke bagair**:
 
 ```bash
 composer install --no-dev --optimize-autoloader
 ```
 
-> If `composer` is not on PATH: *App Store → PHP 8.2 → Settings → Composer →
-> Install*, then use `/www/server/php/82/bin/php /usr/bin/composer`.
+> Agar `composer` PATH par na ho: *App Store → PHP 8.2 → Settings → Composer →
+> Install*, phir `/www/server/php/82/bin/php /usr/bin/composer` istemal karein.
 
-Now the environment file. Start from the **production** example, not
-`.env.example`:
+Ab environment file. **Production** wali example se shuru karein,
+`.env.example` se nahi:
 
 ```bash
 cp .env.production.example .env
 $PHP artisan key:generate
 ```
 
-Edit `.env` and fill in:
+`.env` edit kar ke ye bharein:
 
 ```ini
 APP_URL=https://pos.knbazaar.com
 
-DB_DATABASE=<the name aaPanel generated>
-DB_USERNAME=<the user aaPanel generated>
-DB_PASSWORD=<the password aaPanel generated>
+DB_DATABASE=<jo naam aaPanel ne banaya>
+DB_USERNAME=<jo user aaPanel ne banaya>
+DB_PASSWORD=<jo password aaPanel ne banaya>
 
-# aaPanel's own MySQL, not the system one
+# aaPanel ki apni MySQL, system wali nahi
 BACKUP_MYSQLDUMP=/www/server/mysql/bin/mysqldump
 
-# Fill these in from your mail provider. Leaving MAIL_MAILER=log means
-# password resets appear to work and no email ever arrives.
+# MAIL_MAILER=log chhorne ka matlab: password reset kaam karta
+# lagega aur email kabhi nahi jayegi.
 MAIL_MAILER=smtp
 MAIL_HOST=
 MAIL_PORT=587
@@ -139,24 +140,25 @@ MAIL_PASSWORD=
 MAIL_FROM_ADDRESS="no-reply@knbazaar.com"
 ```
 
-`APP_KEY` and `DB_PASSWORD` are empty in the example on purpose — a plausible
-placeholder in a committed file is a credential somebody eventually ships.
+Example mein `APP_KEY` aur `DB_PASSWORD` jaan boojh kar khali hain — committed
+file mein qabil-e-yaqeen placeholder wo credential hai jo koi na koi aakhir ship
+kar hi deta hai.
 
 ---
 
-## 5. Point the web server at `public/`
+## 5. Web server ka rukh `public/` ki taraf karein
 
 *Website → pos.knbazaar.com → Settings → Site directory*
 
-Set **Running directory** to `/public`.
+**Running directory** ko `/public` set karein.
 
-This is not only about routing. `/www/wwwroot/pos.knbazaar.com` contains `.env`,
-`storage/` and `vendor/`. Serving that directory publishes your database
-password. Setting the run directory to `/public` puts everything else one level
-above the web root, where a browser cannot reach it at all.
+**Ye routing ka masla nahi, security ka hai.** `/www/wwwroot/pos.knbazaar.com`
+ke andar `.env`, `storage/` aur `vendor/` hain. Us directory ko serve karna aap
+ka *database password publish karna* hai. `/public` par le jane se baqi sab web
+root se aik level upar chala jata hai, jahan browser pohanch hi nahi sakta.
 
-Then *Settings → URL Rewrite* → choose the **`laravel5`** preset. If your panel
-has no preset, paste this:
+Phir *Settings → URL Rewrite* → **`laravel5`** preset chunein. Agar aap ke panel
+mein preset na ho to ye paste kar dein:
 
 ```nginx
 location / {
@@ -164,19 +166,20 @@ location / {
 }
 ```
 
-**Check it now**, before going further: `https://pos.knbazaar.com/login` should
-return something other than a 404. A 404 here means one of these two settings
-did not take.
+**Abhi check karein**, aage barhne se pehle:
+`https://pos.knbazaar.com/login` ko 404 ke ilawa kuch dena chahiye. Yahan 404 ka
+matlab hai ke in do settings mein se koi lagi nahi.
 
 ---
 
-## 6. Build the front-end assets
+## 6. Front-end assets build karein
 
-**`public/build` is not in the repository.** A fresh clone has no compiled CSS
-or JS, and the site will render as unstyled text until this is done. Pick one:
+**`public/build` repository mein hai hi nahi.** Fresh clone ke paas compiled CSS
+ya JS nahi hoti, aur jab tak ye na ho site plain text ki tarah dikhegi. Do mein
+se aik tareeqa chunein:
 
-**Option A — build on the server** (*App Store → Node.js version manager* →
-install Node 18+):
+**Option A — server par build karein** (*App Store → Node.js version manager* →
+Node 18+ install karein):
 
 ```bash
 cd /www/wwwroot/pos.knbazaar.com
@@ -184,24 +187,26 @@ npm ci
 npm run build
 ```
 
-**Option B — build on your machine and upload.** Run `npm run build` locally,
-then upload the whole `public/build` folder to
-`/www/wwwroot/pos.knbazaar.com/public/build`. Do this again after every deploy
-that touches a Blade view or CSS — Tailwind v4 scans the templates at build
-time, so a new class that was never built simply does not exist.
+**Option B — apni machine par build kar ke upload karein.** Apne computer par
+`npm run build` chalayein, phir poora `public/build` folder
+`/www/wwwroot/pos.knbazaar.com/public/build` par upload kar dein.
+
+Ye **har** us deploy ke baad dobara karna hai jismein koi Blade view ya CSS
+badla ho — Tailwind v4 templates ko *build time* par scan karta hai, to jo class
+kabhi build hi nahi hui wo mojood hi nahi.
 
 ---
 
-## 7. Migrate — and notice what does *not* happen
+## 7. Migrate karein — aur dekhein ke kya *nahi* hota
 
 ```bash
 $PHP artisan migrate --seed --force
 ```
 
-With `APP_ENV=production` this creates the feature and limit registries and a
-starting plan catalogue, and **no accounts at all**. That is deliberate, not a
-failure: the demo shop lives in a separate seeder that refuses to run in
-production. You should see:
+`APP_ENV=production` ke saath ye feature aur limit registries aur aik starting
+plan catalogue banata hai, aur **koi account bilkul nahi**. Ye kharabi nahi,
+jaan boojh kar hai: demo shop aik alag seeder mein hai jo production mein chalne
+se inkar karta hai. Aap ko ye dikhna chahiye:
 
 ```
 Production: demo data skipped. Run `php artisan pos:preflight` next.
@@ -209,24 +214,24 @@ Production: demo data skipped. Run `php artisan pos:preflight` next.
 
 ---
 
-## 8. Create your operator login
+## 8. Apna operator login banayein
 
-Nothing was seeded, so nobody can reach `/admin` yet:
+Kuch seed nahi hua, to abhi `/admin` tak koi pohanch hi nahi sakta:
 
 ```bash
 $PHP artisan pos:make-admin
 ```
 
-It asks for the password rather than taking it as an argument — a password on a
-command line is written to the shell history and is visible in `ps` to every
-other user on the box while the command runs.
+Ye password *poochta* hai, argument ki tarah leta nahi — command line par likha
+password shell history mein mehfooz ho jata hai aur, jab tak command chalti hai,
+`ps` mein box ke har doosre user ko dikhta hai.
 
 ---
 
-## 9. Permissions, links and caches
+## 9. Permissions, link aur caches
 
-aaPanel runs nginx and PHP-FPM as the **`www`** user. Files cloned as root are
-not writable by it, and Laravel needs to write to two places.
+aaPanel nginx aur PHP-FPM ko **`www`** user se chalata hai. Root se clone ki hui
+files us ke liye writable nahi hotin, aur Laravel ko do jagah likhna hota hai.
 
 ```bash
 cd /www/wwwroot/pos.knbazaar.com
@@ -240,20 +245,22 @@ $PHP artisan storage:link
 $PHP artisan optimize
 ```
 
-`storage:link` needs `symlink` (step 3). If it reports success but
-`public/storage` does not exist, that is the disabled function — go back.
+`storage:link` ko `symlink` chahiye (step 3). Agar wo kamyabi ka paighaam de
+magar `public/storage` bane hi na, to wohi band function wajah hai — wapas
+jayen.
 
-> Run `$PHP artisan optimize` again after **every** deploy. A cached config is
-> also how a `.env` change silently has no effect.
+> `artisan optimize` **har** deploy ke baad dobara chalayein. Cached config wo
+> cheez bhi hai jis ki wajah se `.env` ki tabdeeli chup-chaap bekaar chali jati
+> hai.
 
 ---
 
 ## 10. HTTPS
 
-*Website → pos.knbazaar.com → SSL → Let's Encrypt* → issue, then turn on
-**Force HTTPS**.
+*Website → pos.knbazaar.com → SSL → Let's Encrypt* → certificate issue karein,
+phir **Force HTTPS** on kar dein.
 
-Once HTTPS is confirmed working in a browser, tighten `.env`:
+Jab browser mein HTTPS chalta dikh jaye, tab `.env` tight karein:
 
 ```ini
 SESSION_SECURE_COOKIE=true
@@ -264,14 +271,14 @@ SECURITY_HSTS_ENABLED=true
 $PHP artisan optimize
 ```
 
-**Do this in that order.** HSTS tells browsers "never speak to this host over
-HTTP again" for a year, and it is not retractable — turn it on before the
-certificate works and you have locked people out of your own site until the
-max-age expires.
+**Isi tarteeb mein.** HSTS browsers ko kehta hai "is host se ab kabhi HTTP par
+baat na karna" — saal bhar ke liye, aur ye *wapas nahi liya ja sakta*.
+Certificate kaam karne se pehle on kar diya to aap apni hi site se utni muddat
+ke liye bahar ho jayenge.
 
 ---
 
-## 11. The cron entry
+## 11. Cron entry
 
 *Cron → Add task*
 
@@ -279,66 +286,69 @@ max-age expires.
 |---|---|
 | Type | Shell Script |
 | Name | `pos schedule` |
-| Period | **Every 1 minute** |
+| Period | **Har 1 minute** |
 
 ```bash
 cd /www/wwwroot/pos.knbazaar.com && /www/server/php/82/bin/php artisan schedule:run >> /dev/null 2>&1
 ```
 
-That one line drives everything: subscription reconciliation, expiring held
-sales, the nightly backup at 01:00, the integrity sweep at 02:00, weekly
-pruning, and a heartbeat every five minutes so a stopped cron becomes
-*detectable* rather than invisible.
+Yehi aik line sab kuch chalati hai: subscription reconciliation, purane held
+sales ka khatma, raat 01:00 ka backup, 02:00 ka integrity sweep, haftawar
+pruning, aur har paanch minute aik heartbeat — taake ruka hua cron *nazar aa
+sake*, chhupa na rahe.
 
-Nothing scheduled is load-bearing for access control — subscription access is
-derived from dates on every request, so a broken cron cannot keep an expired
-tenant selling.
+Scheduled kaam mein se koi bhi access control ke liye zaroori nahi —
+subscription access har request par tareekhon se nikala jata hai, to kharab cron
+kisi expired tenant ko bechte rehne nahi de sakta.
 
 ---
 
-## 12. Ask the server whether it is ready
+## 12. Server se khud poochein ke wo taiyar hai ya nahi
 
 ```bash
 $PHP artisan pos:preflight
 ```
 
-A checklist can tell you to turn debug off. Only the box can tell you whether it
-*is* off.
+Checklist aap ko keh sakti hai ke debug band kar dein. Magar wo *band hai ya
+nahi*, ye sirf box bata sakta hai.
 
-**Everything must pass except the backup warning**, which clears after the first
-nightly run. If anything is red, fix it before you give anyone the URL:
+**Backup warning ke ilawa sab pass hona chahiye** — wo pehle raat ke backup ke
+baad khud saaf ho jati hai. Agar kuch red ho to URL kisi ko dene se pehle theek
+karein:
 
-| Failure | Fix |
+| Failure | Hal |
 |---|---|
-| Debug mode | `APP_DEBUG=false` in `.env`, then `artisan optimize` |
+| Debug mode | `.env` mein `APP_DEBUG=false`, phir `artisan optimize` |
 | Operator account | Step 8 |
-| Demo accounts / Seeded passwords | Someone ran the demo seeder. Delete those accounts. |
+| Demo accounts / Seeded passwords | Kisi ne demo seeder chala diya. Wo accounts delete karein. |
 | Writable paths | Step 9 |
 | Migrations | `artisan migrate --force` |
 
-Warnings are worth reading but do not block. The scheduler warning clears within
-five minutes if step 11 is right.
+Warnings parhne layeq hain magar rokti nahi. Scheduler wali warning paanch
+minute ke andar saaf ho jati hai agar step 11 theek hai.
 
-> ⚠️ Preflight passing does not mean the installation is secure. It means the
-> mistakes that are cheap to check for have not been made. It does not inspect
-> the server, the database grants or the network.
+> ⚠️ Preflight pass ho jane ka matlab **mehfooz hona nahi**. Matlab sirf ye hai
+> ke jo ghaltiyan check karna sasta tha, wo nahi hui. Ye server, database grants
+> ya network mein kuch nahi dekhti.
 
 ---
 
-## 13. Backups — move them off this machine
+## 13. Backups — inhein is machine se bahar le jayen
 
-The first backup runs tonight at 01:00 and lands in
-`storage/app/private/backups`. **That is on the same disk as the database**, so
-it survives a bad migration and nothing else — not a dead disk, not a fire, not
-ransomware, which encrypts that folder along with everything else.
+Pehla backup aaj raat 01:00 par `storage/app/private/backups` mein banega.
+**Ye database wali hi disk hai**, to ye kharab migration se bacha lega aur bas —
+na mari hui disk se, na aag se, na ransomware se, jo us folder ko baqi sab ke
+saath encrypt kar deta hai.
 
-Do one of these:
+Do mein se aik karein:
 
-- Set `BACKUP_DISK` to S3 or another off-box disk in `config/filesystems.php`.
-- Add `/www/wwwroot/pos.knbazaar.com/storage/app/private/backups` to aaPanel's
-  own backup (*Backup → add directory*) with a remote destination.
+- `BACKUP_DISK` ko S3 ya kisi aur off-box disk par set karein.
+- Ya `/www/wwwroot/pos.knbazaar.com/storage/app/private/backups` ko aaPanel ke
+  apne backup (*Backup → add directory*) mein remote destination ke saath daal
+  dein.
 
-Then take one by hand and **restore it once, before you need it**:
+Phir aik backup haath se lein aur **zaroorat parne se pehle aik baar restore kar
+ke dekhein**:
 
 ```bash
 $PHP artisan pos:backup
@@ -360,14 +370,15 @@ mysql -u root -p pos_restore_check < /tmp/restore/database.sql
 cd /www/wwwroot/pos.knbazaar.com && DB_DATABASE=pos_restore_check $PHP artisan pos:check-integrity
 ```
 
-It should print `Everything reconciles.` — that proves the restored data is
-*consistent*, not merely present. Then drop `pos_restore_check`.
+Isay `Everything reconciles.` likhna chahiye — is se sabit hota hai ke restore
+hua data sirf *mojood* nahi, *durust* bhi hai. Phir `pos_restore_check` drop kar
+dein. `files/public/` ko wapas `storage/app/public/` par copy kar dein.
 
-A backup nobody has restored is a file.
+**Jo backup kabhi restore na kiya gaya ho, wo backup nahi — aik file hai.**
 
 ---
 
-## Deploying an update later
+## Baad mein update deploy karna
 
 ```bash
 cd /www/wwwroot/pos.knbazaar.com
@@ -389,28 +400,28 @@ chown -R www:www storage bootstrap/cache
 $PHP artisan pos:preflight
 ```
 
-If a view or any CSS changed, the `npm run build` is not optional — Tailwind
-scans templates at build time.
+Agar koi view ya CSS badla ho to `npm run build` optional nahi — Tailwind
+templates ko build time par scan karta hai.
 
 ---
 
-## When something is wrong
+## Jab kuch kharab ho
 
-| Symptom | Look at |
+| Alamat | Kahan dekhein |
 |---|---|
-| Unstyled page | Step 6. `ls public/build` — if it is missing, that is it. |
-| 404 on every route but `/` | Step 5 — run directory and rewrite rules. |
-| 500 on every page | `storage/logs/laravel.log`. Usually permissions (step 9) or a missing `APP_KEY`. |
-| A 500 page showing a short code | That code is in `storage/logs/security.log` with the real stack trace. Grep for it. |
-| Images and receipts 404 | `storage:link` did not run — `symlink` is still disabled (step 3). |
-| Backup fails | `proc_open` disabled (step 3), or `BACKUP_MYSQLDUMP` points at the wrong binary. |
-| Password reset does nothing | `MAIL_MAILER` is still `log`. Preflight warns about this. |
-| Held sales piling up, statuses stale | Cron is not running. `pos:preflight` says so within five minutes. |
+| Bina styling ka page | Step 6. `ls public/build` — agar khali hai to yehi wajah hai. |
+| `/` ke ilawa har route par 404 | Step 5 — run directory aur rewrite rules. |
+| Har page par 500 | `storage/logs/laravel.log`. Aksar permissions (step 9) ya ghayab `APP_KEY`. |
+| 500 page par chhota sa code | Wo code `storage/logs/security.log` mein asli stack trace ke saath mojood hai. Usay grep karein. |
+| Images aur receipts 404 | `storage:link` chala hi nahi — `symlink` abhi band hai (step 3). |
+| Backup fail hota hai | `proc_open` band hai (step 3), ya `BACKUP_MYSQLDUMP` ghalat binary par hai. |
+| Password reset kuch nahi karta | `MAIL_MAILER` abhi `log` hai. Preflight is par warning deti hai. |
+| Held sales jama ho rahe hain, statuses purane | Cron nahi chal raha. `pos:preflight` paanch minute ke andar bata deti hai. |
 
-The application log is `storage/logs/laravel.log`. Two others are worth knowing
-about: `security.log` (refusals, lockouts, unexpected errors — kept 180 days)
-and `financial.log` (money writes that were rolled back and left no row anywhere
-— kept a year).
+Application ka log `storage/logs/laravel.log` hai. Do aur jaanna zaroori hai:
+`security.log` (refusals, lockouts, ghair-mutawaqqa errors — 180 din) aur
+`financial.log` (wo money writes jo roll back ho gaye aur kahin koi row nahi
+chhori — aik saal).
 
 ---
 
