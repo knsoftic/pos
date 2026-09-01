@@ -30,6 +30,7 @@ use Database\Seeders\FeatureSeeder;
 use Database\Seeders\LimitSeeder;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -256,12 +257,42 @@ class ScheduledTasksTest extends TestCase
 
         $this->assertNotEmpty($schedule->events());
 
+        /*
+         | ⚠️ ONE EXEMPTION, and it earns it. The heartbeat (#115) is a single
+         | cache write whose whole job is to prove cron is alive. Every server
+         | running it is telling the truth about itself, the last write wins,
+         | and pinning it to one server would mean a dead node's silence looked
+         | like a healthy platform. The two flags exist for work that must
+         | happen ONCE; a timestamp is not that work.
+         */
+        $exempt = ['scheduler-heartbeat'];
+
         foreach ($schedule->events() as $event) {
+            if (in_array($event->description, $exempt, true)) {
+                continue;
+            }
+
             // Without these two, a platform behind two web servers runs every
             // nightly job twice — and the integrity sweep twice over a large
             // tenant list is a self-inflicted outage.
             $this->assertTrue($event->onOneServer, $event->command.' may run on every server at once.');
             $this->assertTrue($event->withoutOverlapping, $event->command.' may overlap with itself.');
         }
+    }
+
+    public function test_the_schedule_leaves_a_heartbeat_so_a_dead_cron_is_visible(): void
+    {
+        // A cron entry that was never installed looks exactly like a quiet
+        // week. `pos:preflight` reads this mark; without it the honest answer
+        // to "is the scheduler running?" is "we cannot tell from here".
+        $heartbeat = collect(app(Schedule::class)->events())
+            ->first(fn ($event) => $event->description === 'scheduler-heartbeat');
+
+        $this->assertNotNull($heartbeat, 'The heartbeat is what makes a stopped scheduler detectable.');
+
+        Cache::forget('pos.scheduler.heartbeat');
+        $heartbeat->run(app());
+
+        $this->assertNotNull(Cache::get('pos.scheduler.heartbeat'));
     }
 }

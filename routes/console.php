@@ -2,6 +2,7 @@
 
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
@@ -75,3 +76,22 @@ Schedule::command('pos:prune')
     ->withoutOverlapping()
     ->onOneServer()
     ->runInBackground();
+
+/*
+| The heartbeat (#115).
+|
+| Everything above is invisible when it works and invisible when it does not —
+| a cron entry that was never installed, or a server whose crontab was lost in
+| a migration, looks exactly like a quiet week. Nobody notices until a shop asks
+| why its held sales have been piling up since March.
+|
+| So the schedule leaves a mark. `pos:preflight` reads it and can say "cron
+| looks stopped" instead of "cannot tell", and it costs one cache write.
+|
+| Deliberately NOT withoutOverlapping/onOneServer: those are for work that must
+| happen once. This is a timestamp, every server that runs it is telling the
+| truth about itself, and the last one to write wins either way.
+*/
+Schedule::call(fn () => Cache::put('pos.scheduler.heartbeat', now(), now()->addDay()))
+    ->everyFiveMinutes()
+    ->name('scheduler-heartbeat');
