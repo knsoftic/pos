@@ -45,7 +45,7 @@
         ['label' => 'Dashboard',    'icon' => 'dashboard',   'route' => 'app.dashboard',       'feature' => null, 'permission' => null],
         ['label' => 'POS',          'icon' => 'pos',         'route' => null, 'feature' => FeatureRegistry::POS_TERMINAL, 'permission' => PermissionRegistry::POS_OPERATE],
         ['label' => 'Sales',        'icon' => 'sales',       'route' => null, 'feature' => FeatureRegistry::SALES_INVOICING, 'permission' => PermissionRegistry::SALES_VIEW],
-        ['label' => 'Purchases',    'icon' => 'purchases',   'route' => null, 'feature' => FeatureRegistry::PURCHASES_ORDERS, 'permission' => PermissionRegistry::PURCHASES_VIEW],
+        ['label' => 'Purchases',    'icon' => 'purchases',   'route' => 'app.purchases.index', 'feature' => FeatureRegistry::PURCHASES_ORDERS, 'permission' => PermissionRegistry::PURCHASES_VIEW],
         ['label' => 'Products',     'icon' => 'products',    'route' => 'app.products.index',  'feature' => null, 'permission' => PermissionRegistry::PRODUCTS_VIEW],
         ['label' => 'Inventory',    'icon' => 'inventory',   'route' => 'app.inventory.index', 'feature' => FeatureRegistry::INVENTORY_STOCK_TRACKING, 'permission' => PermissionRegistry::INVENTORY_VIEW],
         ['label' => 'Transfers',    'icon' => 'refresh',     'route' => 'app.transfers.index', 'feature' => FeatureRegistry::INVENTORY_TRANSFERS, 'permission' => PermissionRegistry::INVENTORY_TRANSFER],

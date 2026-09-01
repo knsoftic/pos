@@ -12,6 +12,7 @@ use App\Models\Plan;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\StockBatch;
+use App\Models\Supplier;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\CatalogService;
@@ -21,6 +22,8 @@ use App\Services\FeatureService;
 use App\Services\InventoryService;
 use App\Services\OrganizationProvisioner;
 use App\Services\ProductService;
+use App\Services\PurchaseReturnService;
+use App\Services\PurchaseService;
 use App\Services\SubscriptionService;
 use App\Services\SupplierLedgerService;
 use App\Services\SupplierService;
@@ -98,6 +101,10 @@ class DatabaseSeeder extends Seeder
         // The people the shop trades with, and enough account history for the
         // statements to have something to foot (#39, #38).
         $this->seedParties($store);
+
+        // A delivery that arrived and one that is still outstanding, so the
+        // purchase screens have both states to show (#35, #36).
+        $this->seedPurchases($store);
 
         $this->command?->info('Seeded accounts (password = "password"):');
         $this->command?->info('  Super admin  → superadmin@pos.test   (/admin/login)');
@@ -200,6 +207,68 @@ class DatabaseSeeder extends Seeder
                 'city' => 'Lahore',
                 'payment_terms_days' => 15,
             ]);
+        });
+    }
+
+    /**
+     * Two purchases: one fully received and part-paid, one still out with the
+     * supplier — plus a small return against the first (#35, #36, #37).
+     *
+     * Posted through the real services, so the stock ledger, the supplier's
+     * account and the purchase all tell the same story.
+     */
+    protected function seedPurchases(Business $store): void
+    {
+        app(TenantContext::class)->runFor($store, function (): void {
+            $purchases = app(PurchaseService::class);
+
+            $supplier = Supplier::query()->where('name', 'Metro Cash & Carry')->first();
+            $branch = Branch::query()->where('is_main', true)->first();
+            $cola = Product::query()->where('name', 'Cola 500ml')->first();
+            $water = Product::query()->where('name', 'Mineral Water 1.5L')->first();
+
+            if ($supplier === null || $branch === null || $cola === null || $water === null) {
+                return;
+            }
+
+            // ---- delivered, part-paid, with a small return ----------------
+            $delivered = $purchases->create([
+                'supplier_id' => $supplier->id,
+                'branch_id' => $branch->id,
+                'order_date' => now()->subDays(12)->toDateString(),
+                'supplier_invoice_no' => 'MC-55120',
+            ], [
+                ['product_id' => $cola->id, 'quantity_ordered' => 120, 'unit_cost' => 44, 'tax_rate' => 0],
+                ['product_id' => $water->id, 'quantity_ordered' => 60, 'unit_cost' => 53, 'tax_rate' => 0],
+            ]);
+
+            $purchases->order($delivered);
+            $purchases->receive($delivered->fresh(), [], [
+                'received_date' => now()->subDays(9)->toDateString(),
+                'pay_now' => 5000,
+                'payment_method' => 'cash',
+            ]);
+
+            $colaLine = $delivered->fresh()->items->firstWhere('product_id', $cola->id);
+
+            if ($colaLine !== null) {
+                app(PurchaseReturnService::class)->create($delivered->fresh(), [
+                    'reason' => 'Six bottles cracked in transit',
+                    'return_date' => now()->subDays(7)->toDateString(),
+                ], [$colaLine->id => 6]);
+            }
+
+            // ---- still out with the supplier ------------------------------
+            $outstanding = $purchases->create([
+                'supplier_id' => $supplier->id,
+                'branch_id' => $branch->id,
+                'order_date' => now()->subDays(2)->toDateString(),
+                'expected_date' => now()->addDays(5)->toDateString(),
+            ], [
+                ['product_id' => $water->id, 'quantity_ordered' => 90, 'unit_cost' => 53, 'tax_rate' => 0],
+            ]);
+
+            $purchases->order($outstanding);
         });
     }
 

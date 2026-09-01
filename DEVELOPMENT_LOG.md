@@ -16,7 +16,7 @@
 | **Environment** | Windows 11 + XAMPP (PHP + MySQL/MariaDB) |
 | **Start Date** | 2026-08-25 |
 | **Demo logins** | [LOGIN_CREDENTIALS.md](LOGIN_CREDENTIALS.md) — seeded accounts (dev only, #191) |
-| **Current Status** | ✅ **Phase 5 MUKAMMAL (100%)** — Customers + Suppliers + dono ke **ledgers** (debit/credit/running balance, credit limits, blocking, statements). Phases 0–5 mukammal. **KN Softic branding** poore system pe live. **402 tests / 1,259 assertions pass** (MySQL `pos_saas_test`). Build + browser verified, console zero errors. ➡️ **Next: Phase 6** (Purchases + Supplier Ledger). |
+| **Current Status** | ✅ **Phase 6 MUKAMMAL (100%)** — Purchases + returns: order karne se kuch post nahi hota, stock aur supplier ka account **receipt** pe chalte hain (#119 ka poora transaction flow). Phases 0–6 mukammal. **KN Softic branding** poore system pe live. **440 tests / 1,395 assertions pass** (MySQL `pos_saas_test`). Build + browser verified, console zero errors. ➡️ **Next: Phase 7** (POS + Sales + Payments + Customer Ledger). |
 
 ---
 
@@ -42,7 +42,7 @@
 | **3** | Roles + Permissions + Branches + POS Counters + Employees | ✅ Ho gaya | 100% |
 | **4** | Products + Categories + Brands + Units + Inventory | ✅ Ho gaya | 100% |
 | **5** | Customers + Suppliers (+ Ledgers) | ✅ Ho gaya | 100% |
-| **6** | Purchases + Supplier Ledger | ⬜ Baqi | 0% |
+| **6** | Purchases + Supplier Ledger | ✅ Ho gaya | 100% |
 | **7** | POS + Sales + Payments + Customer Ledger | ⬜ Baqi | 0% |
 | **8** | Returns + Stock Adjustments + Transfers | ⬜ Baqi | 0% |
 | **9** | Expenses + Profit & Loss | ⬜ Baqi | 0% |
@@ -52,7 +52,7 @@
 | **13** | Animations + UI Polish + Performance | ⬜ Baqi | 0% |
 | **14** | Security + Testing | 🔄 Chal raha hai | ~25% |
 | **15** | Deployment Preparation | ⬜ Baqi | 0% |
-| | **TOTAL PROGRESS** | 🟢 | **~48%** |
+| | **TOTAL PROGRESS** | 🟢 | **~54%** |
 
 ---
 
@@ -112,6 +112,59 @@ Poore project ka audit hua, **KN Softic ki professional branding** lagi, aik pur
 **⬜ Phase 4 mein ab sirf ye baqi:** batch + expiry tracking (#34) · barcode label printing (#27) · product image upload (#149) · CSV import/export (#150/#151).
 
 ➡️ **Next:** Phase 4 close (expiry + barcode + import/export), phir **Phase 5** — Customers + Suppliers + ledgers.
+
+
+### 2026-08-29 — Phase 6 MUKAMMAL ✅ (Purchases + Supplier Ledger)
+
+Pehla module jo teenon cheezon ko aik saath chhuta hai: **catalogue (Phase 4) + inventory (Phase 4) + supplier ledger (Phase 5)**.
+
+**✅ JO HO GAYA:**
+
+**1) Sab se ahem faisla: order karne se KUCH nahi hota**
+- Purchase order aik **darkhwast** hai. Jab tak maal nahi aata, dukaan ke paas na naya stock hai na naya qarz. **Shelf aur supplier ka account dono RECEIPT pe chalte hain** — aur sirf utna jitna asal mein aaya.
+- Isi liye **`Partial` apni jagah aik state hai**, koi error nahi: kam maal aana aam baat hai, aur dukaan ko aik nazar mein dikhna chahiye ke kis order ka maal abhi baqi hai.
+- States: `Draft` → `Ordered` → `Partial` / `Received`, aur `Cancelled`. Sirf **draft edit** ho sakta hai (order jane ke baad kaghaz aur delivery ka ikhtilaf ho jata, aur receipt ke baad stock ledger bol chuka hota hai).
+
+**2) Receipt ka flow — #119 jo spec mein likha hai, wo aik transaction mein**
+```
+validate → lines → stock → ledger → payment → commit
+```
+- **validate** — purchase receive kar sakta hai, branch reachable hai, quantity ordered se zyada nahi.
+- **lines** — har line ka `quantity_received` sirf **nayi** quantity se barhta hai (isi liye doosri receipt pehli ko dobara nahi ginti).
+- **stock** — `InventoryService` se movement, **line ki apni cost** ke saath, taake shelf usi qeemat pe value ho jo is delivery ki thi (catalogue ki purani cost pe nahi).
+- **ledger** — supplier ko **jo aaya us ki value** ka debit. Jo order kiya tha uska nahi.
+- **payment** — agar darwaze pe paise diye, wo usi transaction mein credit ho jate hain.
+- **commit** — sab kuch, ya kuch bhi nahi.
+
+**3) Zyada delivery chup-chaap qabool nahi hoti** — agar supplier ne ordered se zyada bhej diya to wo **baat karne wali cheez** hai, chup-chaap bill pe charhane wala number nahi. Refuse hota hai, aur kuch bhi aadha apply nahi hota.
+
+**4) Money model — har figure line se banta hai**
+- ⚠️ **Document-level discount/shipping ka column jaan boojh kar nahi rakha.** Warna partial delivery pe usay lines pe **apportion** karna parta — aik rounding puzzle jo full receipt aur partial receipt pe **alag jawab** deta. Carriage aik **line** ki tarah jata hai.
+- Line: `quantity × cost − discount + tax`. `effectiveUnitCost()` discount ko poori ordered quantity pe phailata hai, to aadhi delivery apna **wajib hissa** discount ka le kar aati hai — warna pehla box poora discount kha jata aur aakhri ko kuch na milta.
+- Totals **store** hote hain (recompute nahi), kyunke pichle March ka bill aaj bhi wahi dikhna chahiye jo tab dikhta tha.
+
+**5) Purchase returns (#37) — alag document, negative purchase nahi**
+- Wajah: return apni date pe, apni wajah se hota hai, aur aksar delivery ke **hissay** ka hota hai. Usay original mein ghol dena aik aisi document ko dobara likhna hota jis pe amal ho chuka (#198). Aur supplier poochta hai *"kya wapas bheja, kab"* — us sawal ka apna number chahiye.
+- **Jo aaya us se zyada wapas nahi ja sakta.** Har return line us **purchase line** ko point karti hai jise wo reverse kar rahi hai, to service jawab de sakti hai: "12 aaye, 5 pehle ja chuke, ab zyada se zyada 7". Ye link na hota to wahi delivery do dafa return ho kar supplier ka account ulta kar deti.
+- Stock **usi cost pe** wapas jata hai jis pe aaya tha — maal wapas karne se baqi stock ki value nahi badalni chahiye.
+
+**6) Cancel karna ≠ reverse karna**
+- Draft ya untouched order cancel karne se kuch nahi hota. **Partly received order cancel karne pe jo aa chuka wo aaya hi rehta hai** — stock shelf pe, aur supplier ka us pe haq. Sirf baqi outstanding chhoora jata hai. Delivery ulatna **return** hai, cancellation nahi.
+
+**7) Permissions — paanch alag authorities (#52)**
+`purchases.view` (parhna) · `purchases.create` (order raise + receive) · `purchases.update` (draft edit) · `purchases.void` (cancel/delete draft) · `purchases.return` (maal wapas). Aur **bill ki payment `suppliers.ledger` pe** hai — supplier ke account pe paisa hilana aik hi authority hai, chahe wo account screen se ho ya purchase se.
+
+**8) ⚠️ Tests — 38 naye, sab PASS**
+- `Purchasing/PurchaseTest` (26): draft/order kuch post nahi karte, line arithmetic (500 − 50 + 10% = 495, effective unit 49.5), receipt pe stock **delivery ki cost pe**, short delivery → Partial aur sirf aaye hue ka bill, **doosri receipt double-count nahi karti**, over-delivery refuse (aur kuch aadha apply nahi), door pe payment usi transaction mein, service line bill hoti hai magar shelf pe nahi jati, **batch-tracked line apna lot + expiry le kar jati hai**, partial cancel jo aaya wo rakhta hai, sirf untouched draft delete hota hai, returns (stock↓ + credit, limit, accumulate, bina receipt ke nahi, bina reason ke nahi), plan features, branch aur tenant gates.
+- `Purchasing/PurchaseAccessTest` (12): poora owner flow draft→paid, do visits mein partial receive, **paanchon authorities alag** (parhne wala receive nahi kar sakta, order karne wala pay nahi kar sakta, cancel ko reason chahiye, return apni permission), plan gates, cross-tenant 404, future date aur khali lines refuse.
+- **Result: `php artisan test` → 440 tests / 1,395 assertions PASS**.
+
+**9) Seeder + build + browser verification**
+- Demo data: **PO-000001** (120 Cola + 60 Water = 8,460 · poora received · 5,000 paid · 6 bottles return) aur **PO-000002** (90 Water = 4,770 · abhi supplier ke paas).
+- ✅ Browser verified: purchases list (Open orders 1 · Unpaid 3,460 · PO-000002 pe **"Nothing owed yet"** — yani central decision screen pe nazar aata hai), purchase detail (lines + "6 returned" + returns section + **"The bill"** panel jo kehta hai *"You are billed for what arrived, not for what was ordered"*), aur browser se **asli kaam**: bill pay kiya → *"Paid 3,460.00. This bill is now settled."*, phir PO-000002 pe **40 of 90 receive + 1,000 payment** → *"partly received. 1,120.00 still to pay."*
+- Numbers end-to-end trace hote hain: water stock 17 opening + 60 + 40 = **117**, supplier balance **27,856**. Zero console errors.
+
+➡️ **Next: Phase 7** — POS + Sales + Payments + Customer Ledger (sab se bara module; inventory aur customer ledger dono tayyar hain).
 
 
 ### 2026-08-29 — Phase 5 MUKAMMAL ✅ (Customers + Suppliers + Ledgers)
@@ -777,13 +830,13 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 ## PHASE 6 — Purchases + Supplier Ledger
 *(Spec ref: #35–37, #119, #183)*
 
-- [ ] Purchase management (full form) — #35
-- [ ] Purchase auto stock-increase — #35
-- [ ] Purchase status (Draft/Ordered/Received/Partial/Cancelled) — #36
-- [ ] Purchase return (stock↓ + supplier ledger + report) — #37
-- [ ] **Purchase DB transaction flow** (validate→create→stock→ledger→payment→commit) — #119
-- [ ] `PurchaseService` — #183
-- [ ] Purchase reports link — #54
+- [x] Purchase management (full form) — #35 *(draft → order → receive; lines pe cost/discount/tax, aur batch-tracked products pe lot + expiry)*
+- [x] Purchase auto stock-increase — #35 *(`InventoryService` se, **line ki apni cost** pe — catalogue ki purani cost pe nahi; service lines bill hoti hain magar shelf pe nahi jatin)*
+- [x] Purchase status (Draft/Ordered/Received/Partial/Cancelled) — #36 *(order karne se kuch post nahi hota; `Partial` apni jagah aik state hai kyunke kam maal aana aam baat hai; partial cancel jo aaya wo rakhta hai)*
+- [x] Purchase return (stock↓ + supplier ledger + report) — #37 *(alag document, negative purchase nahi; har line us purchase line ko point karti hai jise reverse kar rahi hai — **jo aaya us se zyada wapas nahi ja sakta**)*
+- [x] **Purchase DB transaction flow** (validate→create→stock→ledger→payment→commit) — #119 *(bilkul isi tarteeb mein, aik `DB::transaction` mein; over-delivery refuse hone pe kuch bhi aadha apply nahi hota)*
+- [x] `PurchaseService` — #183 *(+ `PurchaseReturnService`; dono khud koi stock ya balance nahi likhte — `InventoryService` aur `SupplierLedgerService` ko call karte hain)*
+- [x] Purchase reports link — #54 *(purchases list pe headline figures: open orders, unpaid bills, is mahine ka received value + status/supplier/unpaid filters. Poori purchase report Phase 10 mein)*
 
 ---
 
@@ -937,12 +990,12 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 - [x] Feature tests: Login + Permissions *(`Auth/AuthenticationTest` 22 + `Auth/PasswordResetTest` 11 + `Organization/RolePermissionTest` 31 — dono guards, cross-guard denial, throttle, enumeration safety, aur poora 3-layer permission check)* — #116
 - [x] Feature tests: Plan Limits, Plan Features — #116 *(`Subscription/PlanLimitTest` 29 + `Subscription/PlanFeatureTest` 21 — resolution order, unlimited, enforcement, cache invalidation, `CheckFeature` middleware)*
 - [ ] Feature tests: POS Sale — #116 · [x] **Stock Update** *(`Inventory/InventoryTest` 31 — ledger vs cache, negative stock, costing, per-branch isolation)*
-- [ ] Feature tests: Purchase, Returns — #116
+- [x] Feature tests: Purchase, Returns — #116 *(`Purchasing/PurchaseTest` 26 + `Purchasing/PurchaseAccessTest` 12 — receipt ka transaction flow, partial/double-count, over-delivery, returns ki limit, paanchon authorities)*
 - [x] Feature tests: Customer/Supplier Balance — #116 *(`Parties/PartyLedgerTest` 26 + `Parties/PartyAccessTest` 15 — dono taraf ka debit/credit, credit limits, blocking, statement ka foot karna, drift detection)*
 - [x] Feature tests: Subscription Expiry — #116 *(`Subscription/SubscriptionExpiryTest` 26 + `Subscription/SubscriptionGateTest` 22 — trial/grace/expiry, lock vs read-only vs pos-off, stale status column dono taraf se)*
 - [x] ⚠️ Tenant leak test (Business A → Business B URL = 403/404) — #117 *(cross-tenant PK `find()` → null; dashboard HTTP test dono tenants pe; request input se tenant switch block)*
 
-> **Ab tak ka test status:** `php artisan test` → **402 tests / 1,259 assertions PASS** (MySQL `pos_saas_test`) — Auth 22 · PasswordReset 11 · TenantIsolation 20 · PlanLimit 29 · PlanFeature 21 · SubscriptionExpiry 26 · SubscriptionGate 22 · RolePermission 31 · BranchAccess 19 · Employee 20 · Catalog 23 · Product 24 · Inventory 31 · StockTransfer 22 · BatchExpiry 17 · CatalogTools 22 · PartyLedger 26 · PartyAccess 15 · Unit 1. Har naye phase ke saath yahan tests barhte rahenge.
+> **Ab tak ka test status:** `php artisan test` → **440 tests / 1,395 assertions PASS** (MySQL `pos_saas_test`) — Auth 22 · PasswordReset 11 · TenantIsolation 20 · PlanLimit 29 · PlanFeature 21 · SubscriptionExpiry 26 · SubscriptionGate 22 · RolePermission 31 · BranchAccess 19 · Employee 20 · Catalog 23 · Product 24 · Inventory 31 · StockTransfer 22 · BatchExpiry 17 · CatalogTools 22 · PartyLedger 26 · PartyAccess 15 · Purchase 26 · PurchaseAccess 12 · Unit 1. Har naye phase ke saath yahan tests barhte rahenge.
 
 ---
 

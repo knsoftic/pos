@@ -21,6 +21,8 @@ use App\Http\Controllers\App\InventoryController;
 use App\Http\Controllers\App\PosCounterController;
 use App\Http\Controllers\App\ProductController;
 use App\Http\Controllers\App\ProductImportController;
+use App\Http\Controllers\App\PurchaseController;
+use App\Http\Controllers\App\PurchaseReturnController;
 use App\Http\Controllers\App\RoleController;
 use App\Http\Controllers\App\StockTransferController;
 use App\Http\Controllers\App\SupplierController;
@@ -260,6 +262,56 @@ Route::middleware('tenant.app')
         | A shop assistant who may look a customer up should not thereby be able
         | to write off their debt.
         */
+
+        /*
+        |--------------------------------------------------------------------
+        | Purchases (Phase 6)
+        |--------------------------------------------------------------------
+        | The gates follow what each action actually does, not what screen it
+        | happens to live on:
+        |
+        |   purchases.view    read the orders
+        |   purchases.create  raise one, send it, and take the delivery in
+        |   purchases.update  edit a draft
+        |   purchases.void    call one off, or delete an untouched draft
+        |   purchases.return  send goods back (#37)
+        |   suppliers.ledger  PAY the bill — money on a supplier account is the
+        |                     same authority whether it is paid from the account
+        |                     screen or from the purchase (#52)
+        */
+        Route::middleware('feature:purchases.orders')->group(function () {
+            Route::get('purchases', [PurchaseController::class, 'index'])
+                ->middleware('permission:purchases.view')->name('purchases.index');
+
+            Route::middleware('permission:purchases.create')->group(function () {
+                Route::get('purchases/create', [PurchaseController::class, 'create'])->name('purchases.create');
+                Route::post('purchases', [PurchaseController::class, 'store'])->name('purchases.store');
+                Route::post('purchases/{purchase}/order', [PurchaseController::class, 'order'])->name('purchases.order');
+                Route::post('purchases/{purchase}/receive', [PurchaseController::class, 'receive'])->name('purchases.receive');
+            });
+
+            Route::middleware('permission:purchases.update')->group(function () {
+                Route::get('purchases/{purchase}/edit', [PurchaseController::class, 'edit'])->name('purchases.edit');
+                Route::put('purchases/{purchase}', [PurchaseController::class, 'update'])->name('purchases.update');
+            });
+
+            Route::middleware('permission:purchases.void')->group(function () {
+                Route::post('purchases/{purchase}/cancel', [PurchaseController::class, 'cancel'])->name('purchases.cancel');
+                Route::delete('purchases/{purchase}', [PurchaseController::class, 'destroy'])->name('purchases.destroy');
+            });
+
+            Route::post('purchases/{purchase}/payments', [PurchaseController::class, 'settle'])
+                ->middleware('permission:suppliers.ledger')->name('purchases.payments');
+
+            // Returns (#37) — their own feature and their own permission.
+            Route::middleware(['feature:purchases.returns', 'permission:purchases.return'])->group(function () {
+                Route::get('purchases/{purchase}/returns/create', [PurchaseReturnController::class, 'create'])->name('purchases.returns.create');
+                Route::post('purchases/{purchase}/returns', [PurchaseReturnController::class, 'store'])->name('purchases.returns.store');
+            });
+
+            Route::get('purchases/{purchase}', [PurchaseController::class, 'show'])
+                ->middleware('permission:purchases.view')->name('purchases.show');
+        });
 
         // ---- customers (#39, #40, #41, #105) --------------------------------
         Route::middleware('feature:customers.management')->group(function () {
