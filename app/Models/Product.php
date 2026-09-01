@@ -61,6 +61,7 @@ class Product extends Model
             'track_inventory' => 'boolean',
             'tracks_batches' => 'boolean',
             'is_active' => 'boolean',
+            'is_favourite' => 'boolean',
         ];
     }
 

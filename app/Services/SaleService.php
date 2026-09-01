@@ -118,6 +118,9 @@ class SaleService
                 'cash_session_id' => $session?->id,
                 'customer_id' => $customer?->id,
                 'invoice_no' => $this->nextInvoiceNumber($branchId),
+                // #91: one cart, one sale, however many times the request
+                // arrives. The unique index is what actually enforces it.
+                'idempotency_key' => $data['idempotency_key'] ?? null,
                 'status' => SaleStatus::Completed,
                 'sold_at' => now(),
                 'sale_date' => $data['sale_date'] ?? now()->toDateString(),

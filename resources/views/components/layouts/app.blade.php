@@ -43,7 +43,7 @@
      */
     $nav = [
         ['label' => 'Dashboard',    'icon' => 'dashboard',   'route' => 'app.dashboard',       'feature' => null, 'permission' => null],
-        ['label' => 'POS',          'icon' => 'pos',         'route' => null, 'feature' => FeatureRegistry::POS_TERMINAL, 'permission' => PermissionRegistry::POS_OPERATE],
+        ['label' => 'POS',          'icon' => 'pos',         'route' => 'app.pos.index', 'feature' => FeatureRegistry::POS_TERMINAL, 'permission' => PermissionRegistry::POS_OPERATE],
         ['label' => 'Sales',        'icon' => 'sales',       'route' => null, 'feature' => FeatureRegistry::SALES_INVOICING, 'permission' => PermissionRegistry::SALES_VIEW],
         ['label' => 'Purchases',    'icon' => 'purchases',   'route' => 'app.purchases.index', 'feature' => FeatureRegistry::PURCHASES_ORDERS, 'permission' => PermissionRegistry::PURCHASES_VIEW],
         ['label' => 'Products',     'icon' => 'products',    'route' => 'app.products.index',  'feature' => null, 'permission' => PermissionRegistry::PRODUCTS_VIEW],

@@ -16,7 +16,7 @@
 | **Environment** | Windows 11 + XAMPP (PHP + MySQL/MariaDB) |
 | **Start Date** | 2026-08-25 |
 | **Demo logins** | [LOGIN_CREDENTIALS.md](LOGIN_CREDENTIALS.md) — seeded accounts (dev only, #191) |
-| **Current Status** | 🔄 **Phase 7 chal raha hai (~40%)** — **Sale engine mukammal**: #118 ke solah steps aik transaction mein, row-lock race protection (#70), split payments + change, credit sales, held sales, void, aur cash register (#46/#139). Baqi: POS screen, phir sales list + receipts. Phases 0–6 mukammal. **468 tests / 1,481 assertions pass** (MySQL `pos_saas_test`). ➡️ **Next: Phase 7 Session 2** — POS screen. |
+| **Current Status** | 🔄 **Phase 7 chal raha hai (~75%)** — Sale engine **+ POS screen** mukammal: cart browser mein (instant), server har cheez dobara price karta hai, barcode scan, hold/resume, split payment + quick cash, shortcuts, aur **idempotency key se double-submit protection** (#91). Baqi: sales list + receipts. Phases 0–6 mukammal. **487 tests / 1,548 assertions pass**. Browser se asli sale verify ki. ➡️ **Next: Phase 7 Session 3** — sales list + invoice/receipt printing. |
 
 ---
 
@@ -43,7 +43,7 @@
 | **4** | Products + Categories + Brands + Units + Inventory | ✅ Ho gaya | 100% |
 | **5** | Customers + Suppliers (+ Ledgers) | ✅ Ho gaya | 100% |
 | **6** | Purchases + Supplier Ledger | ✅ Ho gaya | 100% |
-| **7** | POS + Sales + Payments + Customer Ledger | 🔄 Chal raha hai | ~40% |
+| **7** | POS + Sales + Payments + Customer Ledger | 🔄 Chal raha hai | ~75% |
 | **8** | Returns + Stock Adjustments + Transfers | ⬜ Baqi | 0% |
 | **9** | Expenses + Profit & Loss | ⬜ Baqi | 0% |
 | **10** | Reports | ⬜ Baqi | 0% |
@@ -52,7 +52,7 @@
 | **13** | Animations + UI Polish + Performance | ⬜ Baqi | 0% |
 | **14** | Security + Testing | 🔄 Chal raha hai | ~25% |
 | **15** | Deployment Preparation | ⬜ Baqi | 0% |
-| | **TOTAL PROGRESS** | 🟢 | **~57%** |
+| | **TOTAL PROGRESS** | 🟢 | **~61%** |
 
 ---
 
@@ -112,6 +112,56 @@ Poore project ka audit hua, **KN Softic ki professional branding** lagi, aik pur
 **⬜ Phase 4 mein ab sirf ye baqi:** batch + expiry tracking (#34) · barcode label printing (#27) · product image upload (#149) · CSV import/export (#150/#151).
 
 ➡️ **Next:** Phase 4 close (expiry + barcode + import/export), phir **Phase 5** — Customers + Suppliers + ledgers.
+
+
+### 2026-08-29 — Phase 7 (Session 2): POS screen 🔄 (~75%)
+
+Till ban gayi. Engine pehle se tayyar tha; ye session uske upar wo screen banane ka hai jis pe dukaan ka poora din guzarta hai.
+
+**✅ JO HO GAYA:**
+
+**1) Sab se bara faisla: cart browser mein rehta hai (#122, #90)**
+- Har cart action — quantity ka nudge, line discount, kuch hatana — **foran** hota hai, kyunke koi bhi server ko nahi chhuta. Server se sirf **do** cheezein poochi jati hain: *"is se kya match karta hai?"* aur *"ye rahi mukammal sale"*.
+- Wajah: dukaan ka internet aksar uske poore setup ka sab se kamzor hissa hota hai, aur aisi POS jise basket mein pani ki bottle daalne ke liye round trip chahiye, us par **na-qabil-e-istemaal** hoti hai.
+- ⚠️ Iska matlab ye **nahi** ke browser pe bharosa hai: prices, stock, credit limit aur totals sab `SaleService` un IDs se **dobara** nikalta hai jo browser bhejta hai. Test isay pin karta hai — 500 wali cheez ko 5 kehne wali cart ko server sahi cost pe laga deta hai, aur profit **manfi** dikhta hai (jaisa dikhna chahiye).
+
+**2) Search: server-side, debounced — poora catalogue preload nahi**
+- Business plan wale tenant ke paas hazaaron products ho sakte hain; har till pe har page load pe sab bhejna aik dafa ki sustii ko **hamesha ki sustii** se badalna hota.
+- Iske bajaye **favourites preload** hoti hain (#147), to screen khulte hi grid bhara hua hota hai.
+
+**3) Barcode (#15)** — search box mein Enter ka matlab do mein se aik hai: scanner ne abhi barcode type kiya, ya insaan ne search likh kar pehla result maanga hai. **Pehle barcode try hota hai** (exact code mubham nahi hota), warna top match. Variant ka apna barcode ho to **wahi variant** select hota hai — scanner pehle hi bata chuka, dobara poochna peeche hatna hai.
+
+**4) Double-submit ka asli ilaj (#91)**
+- Button disable karna **shaistagi** hai, hifazat nahi: wo kharab connection, be-sabri wale double-tap, ya timeout ke baad retry se nahi bachata.
+- Till har cart ke liye aik **idempotency key** banati hai, aur `sales` pe unique index hai. Wahi cart chahe jitni dafa aaye, **aik hi sale** banti hai. Test: do dafa bheji hui cart → aik sale, aur stock bhi aik hi dafa kam hua.
+
+**5) Discount cap wahan check hota hai jahan cashier badal nahi sakta (#141)** — cap **shakhs** ka hai, sale ka nahi: wahi basket manager approve kare to jaiz hai. Is liye check `PosCheckoutRequest` mein hai, `SaleService` mein nahi.
+
+**6) Baqi screen**
+- **Layout (#14):** bayen categories (parent pe uske children ke products bhi #148), beech mein search + grid, dayen cart.
+- **Customer (#16, #146):** picker + **aik field wala quick-add** — counter pe khare shakhs se tax number nahi poocha jata. Credit available bhi sath dikhta hai.
+- **Hold/resume (#20):** parked carts bayen taraf; resume karne pe cart wapas bhar jati hai aur hold khatam. Held sale **invoice number kharch nahi karti**.
+- **Shortcuts (#89):** F2 search · F4 customer · F6 hold · F8 pay · F9 discount · Esc clear. Function keys is liye ke till pe haath counter pe hote hain, aur ye product ka naam type karne se takraate nahi.
+- **Payment (#17, #19):** split across methods, aur **quick-cash buttons** (150 / 200 / 500 / 1,000) — wo jo customer asal mein hath mein deta hai.
+- **Till (#139):** agar shop har sale pe cash session maangti hai to POS pehle drawer kholne ko kehta hai.
+
+**🐞 Do cheezein jo verification ne pakrin:**
+1. **`products.is_favourite` ka boolean cast reh gaya tha** — JSON `1` bhej raha tha `true` ke bajaye.
+2. **Cart lines narrow width pe overflow** kar rahi thin (horizontal scrollbar, discount field kat jata). Ab **wrap** karti hain — jo line kinare se bahar khisak jaye usay cashier theek nahi kar sakta.
+
+**7) ⚠️ Tests — 19 naye, sab PASS**
+`Sales/PosScreenTest`: favourites ke saath khulna, JSON search, barcode → aik product, variant ka barcode, till se sale, **wahi cart do dafa = aik sale**, **server ka repricing**, stock se zyada refuse, khali cart, **discount cap** (upar refuse, andar allow), uncapped seller, hold/resume/discard, quick customer + uski permission, favourite toggle, plan aur permission gates, cross-tenant customer.
+
+**Result: `php artisan test` → 487 tests / 1,548 assertions PASS**.
+
+**8) Browser verification** — asli sale ki: do products tap kiye (foran cart mein), Pay (F8), quick-cash **$200** button, Complete sale → **INV-202609-00001 · $150.00 · Change $50.00**. Peeche jaa kar tasdeeq ki: cost **98.31** (shelf ka weighted average, catalogue ka 40+55 nahi), profit **51.69**, Cola 166→165, Water 105→104. Zero console errors. Tablet pe teenon column upar neeche stack ho jate hain.
+
+**⬜ BAQI (Phase 7 ka aakhri session):**
+- ⬜ Sales listing + filters + actions (#21)
+- ⬜ Invoice/receipt 80mm/58mm/A4 + custom footer (#23, #144)
+- ⬜ Print UX aur reprint + audit (#145, #143)
+
+➡️ **Next: Phase 7 Session 3** — sales list aur receipts, phir Phase 7 close.
 
 
 ### 2026-08-29 — Phase 7 (Session 1): Sale engine + cash register 🔄 (~40%)
@@ -900,22 +950,22 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 *(Spec ref: #14–23, #46, #70, #89–91, #118, #122, #139, #143–148, #184)*
 
 ### POS Screen (⚡ main module — fast honi chahiye)
-- [ ] POS layout (Left categories / Center grid / Right cart) — #14, #122
-- [ ] Product search (name/SKU/barcode/category/brand, instant) — #15
-- [ ] Barcode scan → cart add — #15
-- [ ] Category filtering — #148
-- [ ] Product favourites — #147
-- [ ] Customer selection + quick add + Walk-in — #16, #146
-- [ ] Cart operations (qty +/-, discount, tax, remove) — #14
-- [ ] Hold / suspended sales — #20
-- [ ] Keyboard shortcuts (F2/F4/F6/F8/F9/Esc) — #89
-- [ ] AJAX live UX (no full reload) — #90
-- [ ] Loading states + double-submit prevention — #91
+- [x] POS layout (Left categories / Center grid / Right cart) — #14, #122 *(cart **browser mein** rehta hai — har action instant, server sirf do sawal ke jawab deta hai)*
+- [x] Product search (name/SKU/barcode/category/brand, instant) — #15 *(server-side + 150ms debounce; poora catalogue preload **nahi** — wo aik dafa ki sustii ko hamesha ki bana deta)*
+- [x] Barcode scan → cart add — #15 *(Enter pe **pehle barcode** try hota hai phir top match; variant ka apna barcode wahi variant chunta hai)*
+- [x] Category filtering — #148 *(parent pe uske children ke products bhi — "Drinks" dabane wala yehi expect karta hai)*
+- [x] Product favourites — #147 *(`products.is_favourite` — per-shop, per-user nahi: har till aik jaisi khulni chahiye; grid inhi se bhara hota hai)*
+- [x] Customer selection + quick add + Walk-in — #16, #146 *(quick-add mein **aik field** — counter pe khare shakhs se tax number nahi poocha jata; credit available sath dikhta hai)*
+- [x] Cart operations (qty +/-, discount, tax, remove) — #14 *(narrow width pe lines **wrap** karti hain — kinare se bahar khiski line cashier theek nahi kar sakta)*
+- [x] Hold / suspended sales — #20 *(kuch post nahi hota aur **invoice number kharch nahi hota**; resume cart wapas bhar deta hai)*
+- [x] Keyboard shortcuts (F2/F4/F6/F8/F9/Esc) — #89 *(function keys is liye ke haath counter pe hote hain aur ye product ka naam type karne se nahi takraate)*
+- [x] AJAX live UX (no full reload) — #90 *(search, scan, checkout, hold — sab JSON; screen kabhi reload nahi hoti)*
+- [x] Loading states + double-submit prevention — #91 *(button disable **shaistagi** hai; asli ilaj per-cart **idempotency key** + unique index hai — wahi cart chahe jitni dafa aaye, aik hi sale)*
 
 ### Payments (`PaymentService`)
 - [x] Default methods (Cash/Card/Bank/QR/Credit/Split) — #17 *(`config/pos.php` se — shop apna JazzCash/EasyPaisa bina deploy ke add karti hai; `credit` wo method hai jo paisa nahi leta, khaata charge karta hai)*
 - [x] Custom payment methods (JazzCash, EasyPaisa...) — #17 *(env-driven list; unknown method service level pe refuse hota hai)*
-- [ ] QR payment (plan-based, image + reference) — #18
+- [x] QR payment (plan-based, image + reference) — #18 *(`qr` aik payment method hai jo reference (transaction id) leta hai; QR **image** dikhana Phase 11 ke settings ke saath aayega)*
 - [x] Split payment (multi-method, must match total) — #19 *(`sale_payments` aik **table** hai, column nahi — har method alag reconcile hota hai; kam para hissa khaate pe jata hai, aur walk-in udhaar nahi le sakta)*
 
 ### Sales (`SaleService` — #184) ✅ *service mukammal — + `CashSessionService`; dono khud stock ya balance nahi likhte, `InventoryService` aur `CustomerLedgerService` ko call karte hain*
@@ -1051,7 +1101,7 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 - [x] Feature tests: Subscription Expiry — #116 *(`Subscription/SubscriptionExpiryTest` 26 + `Subscription/SubscriptionGateTest` 22 — trial/grace/expiry, lock vs read-only vs pos-off, stale status column dono taraf se)*
 - [x] ⚠️ Tenant leak test (Business A → Business B URL = 403/404) — #117 *(cross-tenant PK `find()` → null; dashboard HTTP test dono tenants pe; request input se tenant switch block)*
 
-> **Ab tak ka test status:** `php artisan test` → **468 tests / 1,481 assertions PASS** (MySQL `pos_saas_test`) — Auth 22 · PasswordReset 11 · TenantIsolation 20 · PlanLimit 29 · PlanFeature 21 · SubscriptionExpiry 26 · SubscriptionGate 22 · RolePermission 31 · BranchAccess 19 · Employee 20 · Catalog 23 · Product 24 · Inventory 31 · StockTransfer 22 · BatchExpiry 17 · CatalogTools 22 · PartyLedger 26 · PartyAccess 15 · Purchase 26 · PurchaseAccess 12 · SaleEngine 28 · Unit 1. Har naye phase ke saath yahan tests barhte rahenge.
+> **Ab tak ka test status:** `php artisan test` → **487 tests / 1,548 assertions PASS** (MySQL `pos_saas_test`) — Auth 22 · PasswordReset 11 · TenantIsolation 20 · PlanLimit 29 · PlanFeature 21 · SubscriptionExpiry 26 · SubscriptionGate 22 · RolePermission 31 · BranchAccess 19 · Employee 20 · Catalog 23 · Product 24 · Inventory 31 · StockTransfer 22 · BatchExpiry 17 · CatalogTools 22 · PartyLedger 26 · PartyAccess 15 · Purchase 26 · PurchaseAccess 12 · SaleEngine 28 · PosScreen 19 · Unit 1. Har naye phase ke saath yahan tests barhte rahenge.
 
 ---
 

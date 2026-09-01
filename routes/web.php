@@ -18,6 +18,7 @@ use App\Http\Controllers\App\CustomerLedgerController;
 use App\Http\Controllers\App\DashboardController as AppDashboardController;
 use App\Http\Controllers\App\EmployeeController;
 use App\Http\Controllers\App\InventoryController;
+use App\Http\Controllers\App\PosController;
 use App\Http\Controllers\App\PosCounterController;
 use App\Http\Controllers\App\ProductController;
 use App\Http\Controllers\App\ProductImportController;
@@ -262,6 +263,42 @@ Route::middleware('tenant.app')
         | A shop assistant who may look a customer up should not thereby be able
         | to write off their debt.
         */
+
+        /*
+        |--------------------------------------------------------------------
+        | The till (Phase 7)
+        |--------------------------------------------------------------------
+        | The screen and its JSON endpoints share one permission — `pos.operate`
+        | — because they are one activity: a cashier who may sell must be able
+        | to search, scan and hold, and one who may not should not be able to
+        | reach any of it.
+        |
+        | Two exceptions carry their own authority: adding a customer from the
+        | till is `customers.manage` (checked in the controller so the till can
+        | hide the button), and opening the drawer is the cash-register feature.
+        */
+        Route::middleware(['feature:pos.terminal', 'permission:pos.operate'])
+            ->prefix('pos')
+            ->name('pos.')
+            ->group(function () {
+                Route::get('/', [PosController::class, 'index'])->name('index');
+
+                // JSON, called constantly, never reloading the page (#90).
+                Route::get('search', [PosController::class, 'search'])->name('search');
+                Route::get('scan', [PosController::class, 'scan'])->name('scan');
+
+                Route::post('checkout', [PosController::class, 'checkout'])->name('checkout');
+
+                Route::post('hold', [PosController::class, 'hold'])->name('hold');
+                Route::get('holds/{sale}', [PosController::class, 'resumeHold'])->name('holds.resume');
+                Route::delete('holds/{sale}', [PosController::class, 'discardHold'])->name('holds.discard');
+
+                Route::post('customers', [PosController::class, 'quickCustomer'])->name('customers.store');
+                Route::post('favourites/{product}', [PosController::class, 'toggleFavourite'])->name('favourites.toggle');
+
+                Route::post('session', [PosController::class, 'openSession'])
+                    ->middleware('feature:accounting.cash_register')->name('session.open');
+            });
 
         /*
         |--------------------------------------------------------------------
