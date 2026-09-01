@@ -59,6 +59,22 @@ pcre    pdo    pdo_mysql  tokenizer  xml  zip  gd
   Iske bagair dono fail hote hain.
 - **`gd`** — product image validation file ko decode kar ke sabit karti hai ke
   wo waqai tasveer hai. Isi tarah `.jpg` naam wali PHP script refuse hoti hai.
+- **`fileinfo`** — Laravel ka flysystem ise **install ke waqt hi** maangta hai;
+  iske bagair `composer install` shuru hone se pehle hi ruk jata hai.
+
+⚠️ **aaPanel CLI aur FPM ke liye alag ini rakhta hai**
+(`/www/server/php/82/etc/php-cli.ini` banaam `php.ini`). UI se extension install
+karne ke baad bhi wo CLI mein ghayab ho sakti hai — aur `migrate`, `pos:backup`
+aur poora cron CLI se chalte hain. Is liye tasdeeq **CLI se** karein, UI ki
+green tick par bharosa na karein:
+
+```bash
+/www/server/php/82/bin/php -r 'foreach (["bcmath","ctype","curl","dom","fileinfo","json","mbstring","openssl","pdo_mysql","tokenizer","xml","zip","gd"] as $e) printf("%-12s %s
+", $e, extension_loaded($e) ? "OK" : "MISSING");'
+```
+
+Koi `MISSING` reh jaye to `/www/server/php/82/etc/php-cli.ini` mein us ki
+`extension=` line khud daal dein, phir PHP restart karein.
 
 ---
 
@@ -168,6 +184,24 @@ composer install --no-dev --optimize-autoloader
 
 > Agar `composer` PATH par na ho: *App Store → PHP 8.2 → Settings → Composer →
 > Install*, phir `/www/server/php/82/bin/php /usr/bin/composer` istemal karein.
+
+⚠️ **aaPanel ka Composer aksar bohat purana hota hai.** Laravel 12 ko
+`composer-runtime-api ^2.2` chahiye, yaani **Composer 2.3+**. Purane par install
+ye keh kar rukta hai — jo dekhne mein lock file ki kharabi lagti hai, hoti nahi:
+
+```
+laravel/framework requires composer-runtime-api ^2.2
+-> found composer-runtime-api[2.0.0] but it does not match the constraint
+Your lock file does not contain a compatible set of packages.
+```
+
+`composer update` **na** chalayein — wo lock file badal dega. Composer khud
+update karein:
+
+```bash
+/www/server/php/82/bin/php /usr/bin/composer self-update
+/www/server/php/82/bin/php /usr/bin/composer --version
+```
 
 Ab environment file. **Production** wali example se shuru karein,
 `.env.example` se nahi:
