@@ -175,6 +175,45 @@ class PreflightTest extends TestCase
         $this->artisan('pos:preflight')->expectsOutputToContain('cron looks stopped');
     }
 
+    public function test_preflight_fails_when_a_cache_predates_the_last_env_change(): void
+    {
+        $routes = base_path('bootstrap/cache/routes-v7.php');
+        $existed = File::exists($routes);
+        $backup = $existed ? File::get($routes) : null;
+        $backupTime = $existed ? File::lastModified($routes) : null;
+
+        // Older than .env — which is exactly the state `artisan optimize`
+        // leaves behind when it runs before the .env edit.
+        File::put($routes, '<?php return [];');
+        touch($routes, File::lastModified(base_path('.env')) - 60);
+
+        try {
+            /*
+             | ⚠️ THIS IS NOT HYPOTHETICAL. On the first real deploy, optimize
+             | ran while APP_DEBUG was still true and the flag was set to false
+             | afterwards. Livewire registers its JS route at a path that
+             | depends on app.debug — livewire.js vs livewire.min.js — so the
+             | cached route and the rendered script tag disagreed. The asset
+             | 404'd, Livewire never loaded, Alpine (which ships inside it)
+             | never loaded, x-cloak was never removed, and every price on the
+             | pricing page was invisible.
+             |
+             | Nothing in that chain mentions a cache. The symptom was "the
+             | prices are missing"; the cause was a file timestamp.
+             */
+            $this->artisan('pos:preflight')
+                ->expectsOutputToContain('predates the last .env change')
+                ->assertFailed();
+        } finally {
+            if ($existed) {
+                File::put($routes, $backup);
+                touch($routes, $backupTime);
+            } else {
+                File::delete($routes);
+            }
+        }
+    }
+
     public function test_preflight_notices_a_missing_operator(): void
     {
         $this->artisan('pos:preflight')

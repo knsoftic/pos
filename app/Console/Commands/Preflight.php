@@ -73,6 +73,7 @@ class Preflight extends Command
         $this->checkMail();
         $this->checkDrivers();
         $this->checkCaches();
+        $this->checkStaleCaches();
         $this->checkStorageLink();
         $this->checkScheduler();
         $this->checkBackups();
@@ -324,6 +325,45 @@ class Preflight extends Command
             app()->isProduction()
                 ? 'Not cached: '.$missing->implode(', ').'. Run `php artisan optimize` as part of the deploy.'
                 : 'Not cached ('.$missing->implode(', ').') — correct outside production.',
+        );
+    }
+
+    protected function checkStaleCaches(): void
+    {
+        /*
+         | ⚠️ A CACHE BUILT BEFORE THE LAST .env EDIT IS WORSE THAN NO CACHE.
+         |
+         | This is not theory. On the first real deploy, `artisan optimize` ran
+         | while APP_DEBUG was still true, and APP_DEBUG=false was set
+         | afterwards. Livewire registers its JavaScript route at a path that
+         | DEPENDS on app.debug — `livewire.js` when true, `livewire.min.js`
+         | when false — so the cached route said one thing and the rendered
+         | script tag asked for the other. The asset 404'd, Livewire never
+         | loaded, Alpine (which ships inside it) never loaded, `x-cloak` was
+         | never removed, and every price on the pricing page stayed invisible.
+         |
+         | Nothing in that chain mentions a cache. The symptom was "prices are
+         | missing"; the cause was a file timestamp. Hence this check.
+         */
+        $env = base_path('.env');
+
+        if (! File::exists($env)) {
+            return;
+        }
+
+        $stale = collect([
+            'config' => base_path('bootstrap/cache/config.php'),
+            'routes' => base_path('bootstrap/cache/routes-v7.php'),
+        ])
+            ->filter(fn (string $path) => File::exists($path) && File::lastModified($path) < File::lastModified($env))
+            ->keys();
+
+        $this->record(
+            $stale->isEmpty() ? self::PASS : self::FAIL,
+            'Cache freshness',
+            $stale->isEmpty()
+                ? 'Caches are newer than .env.'
+                : $stale->implode(' and ').' cache predates the last .env change. Run `php artisan optimize:clear && php artisan optimize`.',
         );
     }
 

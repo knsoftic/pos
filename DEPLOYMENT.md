@@ -391,6 +391,33 @@ jayen.
 > cheez bhi hai jis ki wajah se `.env` ki tabdeeli chup-chaap bekaar chali jati
 > hai.
 
+### ⚠️ `.env` badlein to cache dobara banayein — warna aisi cheezein tootengi jinka cache se koi taalluq nazar nahi aata
+
+Ye asli deploy par hua. `artisan optimize` us waqt chala jab `APP_DEBUG` abhi
+`true` tha, aur `APP_DEBUG=false` baad mein hua. Livewire apni JavaScript ka
+route **`app.debug` ke hisab se** register karta hai — `livewire.js` jab true ho,
+`livewire.min.js` jab false. To cache mein aik rasta tha aur page doosra maang
+raha tha:
+
+- asset **404**
+- Livewire load hi nahi hua
+- **Alpine bhi nahi** (is project mein Alpine Livewire ke andar aata hai)
+- `x-cloak` kabhi nahi hata
+- pricing page par **saari qeematein ghayab**
+
+Is poore silsile mein "cache" ka lafz kahin nahi aata. Alamat thi "qeematein
+nazar nahi aa rahi"; sabab tha aik file ka timestamp. `pos:preflight` ab isay
+pakarti hai (**Cache freshness**), magar `.env` chhoone ke baad hamesha:
+
+```bash
+$PHP artisan optimize:clear
+$PHP artisan optimize
+chown -R www:www bootstrap/cache storage
+```
+
+`chown` saath mein is liye ke `artisan` root se chalta hai aur naye cache files
+root ki milkiyat mein banata hai.
+
 ---
 
 ## 10. HTTPS
@@ -460,6 +487,7 @@ karein:
 | Operator account | Step 8 |
 | Demo accounts / Seeded passwords | Kisi ne demo seeder chala diya. Wo accounts delete karein. |
 | Writable paths | Step 9 |
+| Cache freshness | `.env` cache ke baad badla. `optimize:clear && optimize` |
 | Migrations | `artisan migrate --force` |
 
 Warnings parhne layeq hain magar rokti nahi. Scheduler wali warning paanch
@@ -555,6 +583,7 @@ Server par `npm` ki zaroorat nahi — assets `git pull` ke saath aate hain (step
 | 500 page par chhota sa code | Wo code `storage/logs/security.log` mein asli stack trace ke saath mojood hai. Usay grep karein. |
 | Images aur receipts 404 | `storage:link` chala hi nahi — `symlink` abhi band hai (step 3). |
 | Backup fail hota hai | `proc_open` band hai (step 3), ya `BACKUP_MYSQLDUMP` ghalat binary par hai. |
+| Page khulta hai magar kuch bhi interactive nahi — qeematein, dropdown, theme picker ghayab | Browser console mein `livewire...js` par 404 dekhein. Cache `.env` se purana hai: `optimize:clear && optimize`. |
 | Password reset kuch nahi karta | `MAIL_MAILER` abhi `log` hai. Preflight is par warning deti hai. |
 | Held sales jama ho rahe hain, statuses purane | Cron nahi chal raha. `pos:preflight` paanch minute ke andar bata deti hai. |
 
