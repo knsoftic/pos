@@ -6,6 +6,7 @@ use App\Enums\PurchaseStatus;
 use App\Models\Concerns\BelongsToBranch;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\Blameable;
+use App\Models\Concerns\ProtectsFinancialRecords;
 use App\Services\PurchaseService;
 use Database\Factories\PurchaseFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -30,7 +31,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Purchase extends Model
 {
     /** @use HasFactory<PurchaseFactory> */
-    use BelongsToBranch, BelongsToTenant, Blameable, HasFactory, SoftDeletes;
+    use BelongsToBranch, BelongsToTenant, Blameable, HasFactory, ProtectsFinancialRecords, SoftDeletes;
 
     /** @var list<string> */
     protected $fillable = [
@@ -197,6 +198,16 @@ class Purchase extends Model
     }
 
     public function canBeDeleted(): bool
+    {
+        return $this->status->canBeDeleted();
+    }
+
+    /**
+     * Only an untouched DRAFT. Ordering posts nothing, but receiving moves stock
+     * and the supplier's account, and once that has happened the document is
+     * cancelled rather than removed.
+     */
+    public function isDeletableRecord(): bool
     {
         return $this->status->canBeDeleted();
     }

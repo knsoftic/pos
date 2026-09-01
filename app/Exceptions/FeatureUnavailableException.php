@@ -2,6 +2,8 @@
 
 namespace App\Exceptions;
 
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
 
@@ -32,7 +34,7 @@ class FeatureUnavailableException extends RuntimeException
         ];
     }
 
-    public function render(Request $request): \Illuminate\Http\JsonResponse|\Illuminate\Http\RedirectResponse
+    public function render(Request $request): JsonResponse|RedirectResponse
     {
         if ($request->expectsJson()) {
             return response()->json([

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToBranch;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\ProtectsFinancialRecords;
 use Database\Factories\PurchaseReturnFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -23,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class PurchaseReturn extends Model
 {
     /** @use HasFactory<PurchaseReturnFactory> */
-    use BelongsToBranch, BelongsToTenant, HasFactory;
+    use BelongsToBranch, BelongsToTenant, HasFactory, ProtectsFinancialRecords;
 
     /** @var list<string> */
     protected $guarded = [];
@@ -72,5 +73,14 @@ class PurchaseReturn extends Model
     public function totalQuantity(): float
     {
         return round((float) $this->items->sum('quantity'), 4);
+    }
+
+    /**
+     * Goods that went back to a supplier, on their own date, against their own
+     * credit note. The supplier remembers it even if we stop doing so.
+     */
+    public function isDeletableRecord(): bool
+    {
+        return false;
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\ProtectsFinancialRecords;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,7 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class SaleReturnItem extends Model
 {
-    use BelongsToTenant, HasFactory;
+    use BelongsToTenant, HasFactory, ProtectsFinancialRecords;
 
     /** @var list<string> */
     protected $guarded = [];
@@ -69,5 +70,14 @@ class SaleReturnItem extends Model
     public function costValue(): float
     {
         return round((float) $this->quantity * (float) $this->unit_cost, 4);
+    }
+
+    /**
+     * A line of a posted return. It moved stock or wrote it off; either way the
+     * movement exists and this is what explains it.
+     */
+    public function isDeletableRecord(): bool
+    {
+        return false;
     }
 }

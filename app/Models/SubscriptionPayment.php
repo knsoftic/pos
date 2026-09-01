@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\PaymentStatus;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\ProtectsFinancialRecords;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class SubscriptionPayment extends Model
 {
-    use BelongsToTenant;
+    use BelongsToTenant, ProtectsFinancialRecords;
 
     /**
      * SECURITY: `business_id` and `subscription_id` are set by the service layer,
@@ -78,5 +79,13 @@ class SubscriptionPayment extends Model
     public function methodLabel(): string
     {
         return str($this->method)->replace('_', ' ')->title()->toString();
+    }
+
+    /**
+     * What a shop actually paid us. Ours to keep, and theirs to be shown.
+     */
+    public function isDeletableRecord(): bool
+    {
+        return false;
     }
 }

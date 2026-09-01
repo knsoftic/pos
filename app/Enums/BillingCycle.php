@@ -52,7 +52,7 @@ enum BillingCycle: string
      * land on the last day of the next month, not drift by counting 30 days.
      *
      * @param  int|null  $customDays  Required for {@see self::Custom}.
-     * @return CarbonInterface|null  NULL means "never expires" (lifetime). #174
+     * @return CarbonInterface|null NULL means "never expires" (lifetime). #174
      */
     public function expiryFrom(CarbonInterface $start, ?int $customDays = null): ?CarbonInterface
     {

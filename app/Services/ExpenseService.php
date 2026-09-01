@@ -11,6 +11,7 @@ use App\Models\ExpenseCategory;
 use App\Models\OtherIncome;
 use App\Support\BranchContext;
 use App\Support\FeatureRegistry;
+use App\Support\Slug;
 use App\Support\TenantContext;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
@@ -651,7 +652,7 @@ class ExpenseService
 
     protected function uniqueSlug(string $name, ?int $ignoreId = null): string
     {
-        $base = Str::slug($name) ?: 'category';
+        $base = Slug::base($name, 255, 'category');
         $slug = $base;
         $suffix = 2;
 

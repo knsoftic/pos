@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\ProtectsFinancialRecords;
 use Database\Factories\PurchaseItemFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -20,7 +21,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class PurchaseItem extends Model
 {
     /** @use HasFactory<PurchaseItemFactory> */
-    use BelongsToTenant, HasFactory;
+    use BelongsToTenant, HasFactory, ProtectsFinancialRecords;
 
     /** @var list<string> */
     protected $guarded = [];
@@ -136,5 +137,14 @@ class PurchaseItem extends Model
     public function label(): string
     {
         return $this->description;
+    }
+
+    /**
+     * Deletable exactly while its purchase is still a draft — which is also what
+     * lets a draft's lines be re-entered before anything is ordered.
+     */
+    public function isDeletableRecord(): bool
+    {
+        return $this->purchase?->status->canBeDeleted() ?? false;
     }
 }

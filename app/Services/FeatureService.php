@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\FeatureUnavailableException;
+use App\Http\Middleware\CheckSubscription;
 use App\Models\Business;
 use App\Models\BusinessFeatureOverride;
 use App\Models\Feature;
@@ -26,7 +27,7 @@ use Illuminate\Support\Facades\Cache;
  * EXPIRY IS DELIBERATELY NOT CHECKED HERE. "Is it in the plan" and "is the plan
  * still paid for" are different questions with different remedies, and an
  * expired tenant on `read_only` behaviour still needs feature answers to render
- * its own data. {@see \App\Http\Middleware\CheckSubscription} owns the expiry
+ * its own data. {@see CheckSubscription} owns the expiry
  * gate. Nothing here decides which plan gets what — that is operator data (#190).
  */
 class FeatureService

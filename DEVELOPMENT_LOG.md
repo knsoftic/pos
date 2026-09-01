@@ -16,7 +16,7 @@
 | **Environment** | Windows 11 + XAMPP (PHP + MySQL/MariaDB) |
 | **Start Date** | 2026-08-25 |
 | **Demo logins** | [LOGIN_CREDENTIALS.md](LOGIN_CREDENTIALS.md) — seeded accounts (dev only, #191) |
-| **Current Status** | ✅ **Phase 13 MUKAMMAL** (sirf onboarding wizard #86 baqi) — Session 1 (jo nazar aata hai): dashboard (#12/#123/#124), global search (#75), toasts (#165/#166), Light/Dark/System (#74), breadcrumbs (#164), motion (#73). Session 2 (jo nazar nahi aata): **settings caching** (#96/#168), **query budget test** (#97/#167), **scheduler** — `pos:expire-holds` / `pos:check-integrity` / `pos:prune` (#169/#170/#171), **styled confirm dialog** (#92, 23 native `confirm()` khatam). **Phases 0–13 mukammal.** **693 tests / 2,726 assertions pass**. ➡️ **Next: Phase 14** — Security + Testing (#93–94, #100–101, #116–117, #133, #197–198). |
+| **Current Status** | ✅ **Phase 14 MUKAMMAL** — Session 1 (deewarein): **global** security headers (#100), 403/404/419/429/500/503 error pages jo kuch leak nahi karte aur reference dete hain (#93), `security` + `financial` log channels (#94), `POST /register` samet throttles (#65). Session 2 (hamle + immutability): `ProtectsFinancialRecords` + `ProtectedBuilder` — financial record delete nahi hota, qaida **status** pe hai (#133/#198); CSRF/XSS/SQLi/mass-assignment/upload ka apna proof (#100); aur aik asli slug-overflow bug jo flakiness ban kar chhupa hua tha. **Phases 0–14 mukammal** (sirf onboarding wizard #86 baqi). **735 tests / 2,876 assertions pass** (teen lagatar clean run). ➡️ **Next: Phase 15** — Deployment Preparation. |
 
 ---
 
@@ -59,6 +59,75 @@
 ## 📝 Session Log (Kaam ki History)
 
 > Naya kaam upar add karo (newest first). Har entry mein: **date**, **kya hua**, **kya next hai**.
+
+
+### 2026-09-01 — Phase 14 MUKAMMAL ✅ (security + testing)
+
+Do session. Pehla **deewarein**, doosra **hamle aur immutability**.
+
+---
+
+#### Session 1 — deewarein (#93, #94, #100)
+
+**1) Security headers — aur pehle hi test ne asli bug pakra**
+- Headers `web` group pe lagaye the. Test ne foran pakar liya: **jo request kisi route se match hi nahi karti — yaani har 404 — us pe group middleware chalta hi nahi.** Wahi response bilkul nange headers ke saath jata hai, aur attacker probe wahi karta hai. Ab **global stack** pe hai, jo router ko khud lapetta hai. Test 404 pe headers assert karta hai, sirf isi wajah se.
+- **CSP jaan boojh kar nahi** — ye faisla hai, bhool nahi. Aaj ka app jo bhi CSP pass kar sakta hai usay `unsafe-inline` chahiye, jo bilkul wohi injection allow karta hai jise rokne ke liye CSP hota hai. **Jo header protection lagta ho magar ho nahi, wo na hone se bura hai — kyunke phir koi dobara poochta hi nahi.**
+- **HSTS sirf HTTPS pe.** Dev box se bheja gaya `max-age` us browser mein hostname — `localhost` samet — saal bhar HTTPS pe pin kar deta hai. Plain http pe wo waise bhi ignore hota hai, to na bhejna ehtiyat nahi, **wahid durust behaviour** hai.
+- `/app` aur `/admin` pe `no-store, private`. Proxy aik cashier ki sales list pakar ke agle request ko de de — ye tenant leak hai jo hamare code ko chhuta bhi nahi.
+
+**2) Error pages (#93)** — standalone HTML, maintenance page ki tarah aur usi wajah se: **jo page compiled stylesheet maangta hai wo tab render nahi hota jab asset pipeline hi toota ho.**
+- **500**: koi class name, file path ya SQL nahi. Uski jagah **6-character reference**, jo security log mein asli stack trace ke saath likha jata hai. Phone pe 6 letters, support ko theek wahi trace — aur dukaandar ko 500 bayan nahi karna parta.
+- **419** wo hai jo log **waqai** hit karte hain: form khula reh gaya aur session urr gaya. Framework "Page Expired" keh kar chhor deta hai aur banda soch raha hota hai ke kaam gaya ya nahi. Ab page batata hai ke shayad abhi bhi hai (POS cart browser mein rehta hai).
+- **404** khud iqrar karta hai ke doosri dukaan ka record bhi bilkul aisa hi dikhta hai. Deliberate — 403 tasdeeq kar deta ke record **mojood** hai (#117).
+
+**3) Logging (#94)** — do naye channels: `security` (180 din) · `financial` (1 saal). Application log 14 din ka hai, aur **breach hafton baad pakri jati hai**; 14 din ke baad "ye kab shuru hua?" ka imaandar jawab sirf "ab pata nahi" hai.
+- **Rolled-back transaction kahin koi row nahi chhorta — yehi rollback ka maqsad hai.** To 50 `DB::transaction` call sites edit karne ke bajaye **rollback event** sunte hain: bhoolne ka mauqa khatam, aur agle saal likhi gayi service khud covered.
+- Wo listener **wajah nahi janta**, aur ye jaan boojh kar hai. Exception alag se report hota hai aur **dono lines pe wohi `ref`** hai — aik grep pe jor mil jata hai. Andaza laga kar log line likhna, us line se bura hai jo apni had maan le.
+- Redaction **key** se hoti hai, har depth pe. Value pe heuristic kamzor password bhi miss karta aur imaandar product name bhi kharab karta.
+- **Refusal crash nahi hai.** Permission denial aur lockout ab security channel pe *warning* hain, application error nahi. Jo error log zyadatar "cashier ke paas permission nahi" se bhara ho — wo error log koi nahi parhta.
+
+**4) Throttles (#65, #100)** — **`POST /register` bilkul khula tha**: aik unauthenticated endpoint jo business + user + subscription banata hai. Ab 5 per IP **per ghanta** — 60 second mein reset hone wali window script ko rokti hi nahi. Search, exports, checkout bhi capped; checkout jaan boojh kar loose, kyunke **jo till sale refuse kare wo is limit se rokay jane wali har cheez se bura hai** (asli defence per-cart idempotency key hai). Har limiter config **request time pe** parhta hai, boot pe nahi — boot pe capture ki gayi limit na tune ho sakti hai na test, to chup-chaap sajawat ban jati hai.
+
+---
+
+#### Session 2 — hamle aur immutability (#100, #133, #198)
+
+**5) Financial record integrity — aadat se qaida (#133, #198)**
+- Ab tak guarantee sirf is pe thi ke **delete route nahi hai aur har service ko yaad hai**. Wo chala, aur uski qeemat sifar hai: aik route aur aik `->delete()` door hai, aur jis din tootega us din dukaan ke figures milna band ho jayenge **bina kisi nishan ke**. Jo qaida sab ke zehan mein rehta hai, wo naye contributor ne kabhi suna hi nahi.
+- **Qaida table pe nahi, STATUS pe hai.** Aasan version — "Sale kabhi delete nahi hoti" — ghalat hai, aur itna ghalat ke till toot jaye: **held sale aik basket hai** (na stock hila, na ledger, na paisa) aur usay phenkna durust hai, `pos:expire-holds` roz karta hai. **Completed sale wo document hai jo kisi ke haath mein hai.** Aik hi table, ulte jawab.
+- **Mass delete back door band.** `$sale->items()->delete()` model events chalata hi nahi — aur ye koi ajeeb call nahi, relation ki rows hatane ka **aam tareeqa** hai, is codebase mein har jagah likha hai. `ProtectedBuilder` pehle rows load kar ke har aik se poochta hai, phir asli DELETE Eloquent ko wapas de deta hai.
+- ⚠️ **Jo saaf mana hai wo bhi likha hai:** `DB::table('sales')->delete()` Eloquent tak pohanchta hi nahi. PHP mein koi cheez usay nahi rok sakti, aur na hi kisi ko jiske paas MySQL prompt ho. Ye trait **farsh oonchi karta hai, tijori nahi hai** — aur iska ulta dawa karna zyada khatarnak hota.
+- **Aik deliberate exception, ab documented:** `Expense` / `OtherIncome` delete ho sakte hain (Phase 9). Haq mein: ye dukaan ka apne baare mein likha note hai, koi doosra fareeq nahi jiske paas copy ho, aur delete karna cash wapas till mein daalta hai + audit row likhta hai. Khilaf mein: **band mahine ka profit chup-chaap badal jata hai.** Jaisa bana tha waisa chhora — kaam karta hai, tested hai, istemal mein hai — magar ab uske saath aik test hai jismein poori dalil likhi hai, taake ye ittefaq nahi **faisla** rahe.
+
+**6) Hamle (#100)** — har aik ka apna proof, "framework sambhal lega" nahi.
+- **CSRF**: Laravel ka middleware `runningUnitTests()` pe khud ko band kar leta hai — yaani wo suite jo isay prove karni chahiye, isay kabhi chalati hi nahi. Test aik request ke liye app ko testing environment se bahar nikalta hai. Warna ye test middleware bilkul hata dene pe bhi pass hota.
+- **XSS**: input **verbatim** store hota hai (andar aate hue sanitise karna data barbaad karta hai aur masla us screen pe shift kar deta hai jo sanitise karna bhool jaye), aur bahar jate hue escape — jahan farq parta hai. Plus aik test poori `resources/views` chalta hai: **sirf teen `{!!` hain** (barcode, receipt QR, icon) aur teeno hamare apne generate kiye SVG hain — chautha chup-chaap add nahi ho sakta.
+- **SQLi**: teen payloads, teeno data ban kar bindings mein jate hain. Aur aik line jo aksar chhoot jati hai: **normal search sach mein kaam karti hai** — warna "kuch nahi mila" wala test aisi search pe bhi pass hota jo kabhi kuch na de.
+- **Mass assignment**: payload doosri business mein row nahi daal sakta, aur **kisi ko owner nahi bana sakta**. Input **data tay karta hai, ikhtiyar kabhi nahi.**
+- **Uploads**: `.jpg` naam wali PHP file refuse, SVG refuse (SVG script container hai jo tasveer ki tarah render hota hai), aur asli image aisay naam se store hoti hai **jo uploader ne nahi chuna** — jo naam chunta hai wo ye bhi chunta hai ke file kahan giregi aur kya overwrite karegi.
+
+**🐞 Aik asli production bug pakra — flakiness ki shakl mein**
+- Poora suite **teen mein se aik run** fail kar raha tha: `Data too long for column 'slug'`. Ye MySQL ki hichki nahi thi.
+- Har `uniqueSlug()` naam ko slug karta tha aur collision pe `-2`, `-3` lagata tha — **suffix ke liye jagah chhore bagair**. `roles.name` 60 pe validate hoti hai aur `roles.slug` column bhi 60 ka hai, to 60-character naam jiska slug pehle se maujood ho → 62 characters → **500, us naam pe jo form ne abhi qubool kiya tha.** `products` pe wahi cheez 180 pe.
+- Isay **lamba naam AUR collision dono** chahiye, is liye ye flakiness lagti thi. **Bug ke jeene ka sab se bura tareeqa yehi hai:** itna kam ke log nazar-andaz kar dein, aur itna yaqeeni ke kisi na kisi ke saath ho kar rahe.
+- Hal: `App\Support\Slug::base()` — jagah **pehle** se reserve, phir pehli koshish. Paanchon services aur `RoleFactory` isi se guzarte hain. Do naye test 60 aur 180 ki exact had pe collision karwate hain.
+
+---
+
+**⚠️ Tests — 42 naye, sab PASS**
+- `Security/HardeningTest` (13): headers har qism ke page pe **404 samet** · signed-in shop kabhi shared proxy mein nahi · HSTS plain http pe kabhi nahi · 404 bina stack trace · **500 kuch leak nahi karta aur reference deta hai jo log se milta hai** · 419 kehta hai kaam shayad bacha hai · **discard hui transaction line chhorti hai kyunke row nahi chhorti** · koi raaz kabhi log mein nahi · failed login password session mein flash nahi karta · refusal warning hai, error nahi · sign-up hammer nahi ho sakti · search ka ceiling · throttle config request time pe parhta hai.
+- `Security/FinancialIntegrityTest` (14): held phenki ja sakti hai · **completed bilkul nahi** · voided bhi nahi · void ulti movement se reverse karta hai, document rehta hai · **mass delete posted sale ki lines nahi le sakta** · refuse ke baad lines salamat · held ki lines phir bhi jati hain · stock movement kabhi nahi · ledger entry kabhi nahi · payment kabhi nahi · cash session kabhi nahi · trait ka default **NO** hai · expense wahid deliberate exception · **koi HTTP route financial document delete karne ki peshkash nahi karta**.
+- `Security/AttackSurfaceTest` (15): CSRF (asli middleware ke saath) · CSRF stack mein fitted hai · script tag text ban kar render · **sirf teen `{!!` aur teeno hamare SVG** · barcode label naam escape karta hai · teen SQLi payloads + normal search kaam karti hai · global search se injection · doosri business mein row nahi · **koi owner nahi ban sakta** · product apna stock declare nahi kar sakta · **60 aur 180 ki had pe slug collision** · `.jpg` bani PHP file refuse · SVG refuse · asli image random naam se.
+- **Result: `php artisan test` → 735 tests / 2,876 assertions PASS** — aur **teen lagatar clean run**, kyunke flakiness ka sabab theek hua, chhupaya nahi.
+
+**✅ Browser verification**
+- Headers live: `/`, `/login`, **`/no-such-page` (404)** teeno pe `nosniff` + `SAMEORIGIN` + Referrer-Policy + Permissions-Policy; `/app/*` pe `no-store, private` + `noindex, nofollow`; public `/` pe nahi. HSTS http pe ghayab.
+- 404 page render. **500 page** (`APP_DEBUG=false` ke saath, phir revert): reference **`DSQZW3`** screen pe, aur security log mein wohi `DSQZW3` poore `SQLSTATE ... C:\xampp\...` ke saath — yaani asli tafseel sirf log mein gayi.
+- POS: `ProtectedBuilder` ab Sale/SaleItem/SalePayment/StockMovement/LedgerEntry sab pe hai, to poori sale end-to-end chalayi — **INV-202609-00006, $150.00** complete. (Ye sale demo DB mein rahegi — ab isay delete nahi kiya ja sakta, jo bilkul wahi cheez hai jo is session mein bani.)
+
+**⬜ Baqi:** Phase 13 ka onboarding wizard (#86). Phase 14 ke testing checkboxes phases 1–13 mein tick hote rahe.
+
+➡️ **Next: Phase 15** — Deployment Preparation.
 
 
 ### 2026-09-01 — Phase 13 (Session 2) ✅ — jo nazar nahi aata
@@ -1534,11 +1603,11 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 *(Spec ref: #93–94, #100–101, #116–117, #133, #197–198)*
 
 ### Security
-- [ ] All security rules (CSRF/XSS/SQLi/mass-assignment/uploads/throttle) — #100
+- [x] All security rules (CSRF/XSS/SQLi/mass-assignment/uploads/throttle) — #100 *(`Security/AttackSurfaceTest` 15 — har aik ka apna proof; plus `SecurityHeaders` **global** middleware)*
 - [x] Secure file uploads (MIME/size validate, random names) — #101 *(product images: `config/uploads.php` + content-based MIME check + decode check + random names + dimension cap; SVG allowed nahi)*
-- [ ] Error handling (friendly messages, no technical leak in prod) — #93
-- [ ] Logging (critical exceptions + failed financial txns) — #94
-- [ ] Financial record integrity (edit/void/return, not delete) — #133, #198
+- [x] Error handling (friendly messages, no technical leak in prod) — #93 *(403/404/419/429/500/503 — standalone HTML; 500 pe class/path/SQL kuch nahi, sirf **6-character reference** jo security log se milta hai)*
+- [x] Logging (critical exceptions + failed financial txns) — #94 *(`security` 180 din + `financial` 1 saal; rollback event se, 50 call sites edit kiye bagair; sab kuch **key** se redacted)*
+- [x] Financial record integrity (edit/void/return, not delete) — #133, #198 *(`ProtectsFinancialRecords` trait + `ProtectedBuilder` — rule **status** pe hai, table pe nahi; mass-delete ka back door band)*
 
 ### Testing
 - [x] Feature tests: Tenant Isolation — #116, #117 *(`TenantIsolationTest` — 16 tests: scoped reads/aggregates, cross-tenant `find()` → null, creating-hook force, mass-assignment, escape hatches, HTTP isolation)*

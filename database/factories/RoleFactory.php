@@ -5,6 +5,7 @@ namespace Database\Factories;
 use App\Models\Business;
 use App\Models\Role;
 use App\Models\RolePermission;
+use App\Support\Slug;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -17,12 +18,19 @@ class RoleFactory extends Factory
 
     public function definition(): array
     {
-        $name = fake()->unique()->jobTitle();
+        /*
+         | Faker's longest job titles run to nearly sixty characters, and both
+         | `roles.name` and `roles.slug` stop at sixty — so an unbounded name
+         | here failed the suite roughly one run in three with "Data too long",
+         | which reads as flakiness and is not. Same off-by-a-suffix that
+         | {@see \App\Support\Slug} fixes in the services.
+         */
+        $name = Str::limit(fake()->unique()->jobTitle(), 50, '');
 
         return [
             'business_id' => Business::factory(),
             'name' => $name,
-            'slug' => Str::slug($name).'-'.Str::lower(Str::random(4)),
+            'slug' => Slug::base($name, 60, 'role').'-'.Str::lower(Str::random(4)),
             'description' => fake()->sentence(),
             'is_system' => false,
         ];

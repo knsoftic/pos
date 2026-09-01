@@ -9,9 +9,9 @@ use App\Models\Category;
 use App\Models\Unit;
 use App\Support\FeatureRegistry;
 use App\Support\LimitRegistry;
+use App\Support\Slug;
 use App\Support\TenantContext;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Str;
 
 /**
  * The lists products are filed under: categories, brands and units (#26).
@@ -337,11 +337,13 @@ class CatalogService
     }
 
     /**
+     * Categories and brands both slug into a 140-character column.
+     *
      * @param  class-string<Model>  $model
      */
     protected function uniqueSlug(string $model, string $name, ?int $ignoreId = null): string
     {
-        $base = Str::slug($name) ?: 'item';
+        $base = Slug::base($name, 140, 'item');
         $slug = $base;
         $i = 2;
 

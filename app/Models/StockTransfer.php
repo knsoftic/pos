@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\TransferStatus;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\ProtectsFinancialRecords;
 use App\Services\StockTransferService;
 use Database\Factories\StockTransferFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -23,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class StockTransfer extends Model
 {
     /** @use HasFactory<StockTransferFactory> */
-    use BelongsToTenant, HasFactory;
+    use BelongsToTenant, HasFactory, ProtectsFinancialRecords;
 
     /**
      * Everything that decides what has actually happened — the status, the
@@ -157,5 +158,14 @@ class StockTransfer extends Model
     public function canBeDeleted(): bool
     {
         return $this->status === TransferStatus::Draft;
+    }
+
+    /**
+     * A draft that never moved anything. Once stock has left the sending branch
+     * the transfer is cancelled, because the other branch is waiting on it.
+     */
+    public function isDeletableRecord(): bool
+    {
+        return $this->canBeDeleted();
     }
 }

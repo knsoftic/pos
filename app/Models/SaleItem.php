@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\ProtectsFinancialRecords;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class SaleItem extends Model
 {
-    use BelongsToTenant, HasFactory;
+    use BelongsToTenant, HasFactory, ProtectsFinancialRecords;
 
     /** @var list<string> */
     protected $guarded = [];
@@ -124,5 +125,15 @@ class SaleItem extends Model
         $quantity = (float) $this->quantity;
 
         return $quantity <= 0 ? 0.0 : round($this->net() / $quantity, 4);
+    }
+
+    /**
+     * A line lives and dies with its sale: deletable exactly while the sale is
+     * still a held basket. A missing parent answers NO — an orphan line is a
+     * puzzle, and quietly erasing puzzles is how ledgers stop reconciling.
+     */
+    public function isDeletableRecord(): bool
+    {
+        return $this->sale?->status->canBeDeleted() ?? false;
     }
 }

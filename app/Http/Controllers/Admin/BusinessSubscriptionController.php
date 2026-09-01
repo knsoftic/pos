@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Admin;
 
 use App\Enums\BillingCycle;
 use App\Enums\PaymentStatus;
+use App\Enums\SubscriptionStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Business;
 use App\Models\Plan;
 use App\Models\Subscription;
+use App\Models\SubscriptionPayment;
 use App\Services\SubscriptionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -52,13 +54,13 @@ class BusinessSubscriptionController extends Controller
             'subscriptions' => $query->paginate(25)->withQueryString(),
             'filters' => $filters,
             'plans' => Plan::query()->ordered()->get(['id', 'name', 'slug']),
-            'statuses' => \App\Enums\SubscriptionStatus::options(),
+            'statuses' => SubscriptionStatus::options(),
             'revenue' => [
-                'collected' => \App\Models\SubscriptionPayment::query()->allTenants()->paid()->sum('amount'),
-                'this_month' => \App\Models\SubscriptionPayment::query()->allTenants()->paid()
+                'collected' => SubscriptionPayment::query()->allTenants()->paid()->sum('amount'),
+                'this_month' => SubscriptionPayment::query()->allTenants()->paid()
                     ->whereBetween('paid_at', [now()->startOfMonth(), now()->endOfMonth()])
                     ->sum('amount'),
-                'pending' => \App\Models\SubscriptionPayment::query()->allTenants()
+                'pending' => SubscriptionPayment::query()->allTenants()
                     ->where('status', PaymentStatus::Pending)->sum('amount'),
             ],
             'expiringSoon' => $this->subscriptions->expiringWithin(

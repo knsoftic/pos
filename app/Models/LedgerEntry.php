@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\LedgerEntryType;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\ProtectsFinancialRecords;
 use App\Services\PartyLedgerService;
 use Database\Factories\LedgerEntryFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -29,7 +30,7 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 class LedgerEntry extends Model
 {
     /** @use HasFactory<LedgerEntryFactory> */
-    use BelongsToTenant, HasFactory;
+    use BelongsToTenant, HasFactory, ProtectsFinancialRecords;
 
     public $timestamps = false;
 
@@ -121,5 +122,14 @@ class LedgerEntry extends Model
     public function title(): string
     {
         return $this->description ?: $this->type->label();
+    }
+
+    /**
+     * ⚠️ THE OTHER LEDGER (#38). Same rule, same reason: a party's balance is the
+     * sum of these, and `balance_after` on every later row would be wrong.
+     */
+    public function isDeletableRecord(): bool
+    {
+        return false;
     }
 }

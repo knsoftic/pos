@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\CashSessionStatus;
 use App\Models\Concerns\BelongsToBranch;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\ProtectsFinancialRecords;
 use Database\Factories\CashSessionFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -22,7 +23,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class CashSession extends Model
 {
     /** @use HasFactory<CashSessionFactory> */
-    use BelongsToBranch, BelongsToTenant, HasFactory;
+    use BelongsToBranch, BelongsToTenant, HasFactory, ProtectsFinancialRecords;
 
     /** @var list<string> */
     protected $guarded = [];
@@ -155,5 +156,14 @@ class CashSession extends Model
         $end = $this->closed_at ?? now();
 
         return $this->opened_at->diffForHumans($end, true);
+    }
+
+    /**
+     * A closed session is the answer to "was the till short that day?" — the one
+     * question a deleted session makes permanently unanswerable.
+     */
+    public function isDeletableRecord(): bool
+    {
+        return false;
     }
 }

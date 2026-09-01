@@ -3,8 +3,10 @@
 namespace App\Models;
 
 use App\Enums\BillingCycle;
+use App\Enums\PaymentStatus;
 use App\Enums\SubscriptionStatus;
 use App\Models\Concerns\BelongsToTenant;
+use App\Services\SubscriptionService;
 use Carbon\CarbonInterface;
 use Database\Factories\SubscriptionFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -20,7 +22,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * console has no tenant context and therefore sees all of them.
  *
  * APPEND-ONLY HISTORY (#176): renew / upgrade / downgrade never mutate an
- * existing row — {@see \App\Services\SubscriptionService} stamps `superseded_at`
+ * existing row — {@see SubscriptionService} stamps `superseded_at`
  * on the old one and inserts a new one, inside a transaction. `price`,
  * `currency` and `billing_cycle` are snapshots, so re-pricing a plan tomorrow
  * cannot rewrite what a tenant was charged today. #198
@@ -33,7 +35,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Subscription extends Model
 {
     /** @use HasFactory<SubscriptionFactory> */
-    use HasFactory, BelongsToTenant;
+    use BelongsToTenant, HasFactory;
 
     /**
      * SECURITY: `business_id` is not fillable — a subscription must never be
@@ -260,7 +262,7 @@ class Subscription extends Model
     public function amountPaid(): float
     {
         return (float) $this->payments()
-            ->where('status', \App\Enums\PaymentStatus::Paid)
+            ->where('status', PaymentStatus::Paid)
             ->sum('amount');
     }
 }

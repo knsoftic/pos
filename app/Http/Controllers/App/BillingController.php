@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\App;
 
 use App\Enums\BillingCycle;
+use App\Exceptions\FeatureUnavailableException;
 use App\Http\Controllers\Controller;
 use App\Models\Feature;
 use App\Models\Limit;
@@ -20,7 +21,7 @@ use Illuminate\View\View;
  * The tenant's own billing screen (/app/billing) — #11, #78, #84.
  *
  * Reachable even when the subscription has lapsed: CheckSubscription allow-lists
- * the `app.billing.*` routes, and both {@see \App\Exceptions\FeatureUnavailableException}
+ * the `app.billing.*` routes, and both {@see FeatureUnavailableException}
  * and the expiry gate redirect here. If this page could be locked out, an expired
  * tenant would have no way to see why they were locked out.
  *

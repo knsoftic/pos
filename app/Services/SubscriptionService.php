@@ -642,6 +642,7 @@ class SubscriptionService
      * transaction, caches flushed only after a successful commit.
      *
      * @template T
+     *
      * @param  callable():T  $callback
      * @return T
      */

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\StockMovementType;
 use App\Models\Concerns\BelongsToBranch;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\ProtectsFinancialRecords;
 use App\Services\InventoryService;
 use Database\Factories\StockMovementFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -28,7 +29,7 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 class StockMovement extends Model
 {
     /** @use HasFactory<StockMovementFactory> */
-    use BelongsToBranch, BelongsToTenant, HasFactory;
+    use BelongsToBranch, BelongsToTenant, HasFactory, ProtectsFinancialRecords;
 
     public $timestamps = false;
 
@@ -110,5 +111,16 @@ class StockMovement extends Model
     public function value(): float
     {
         return round((float) $this->quantity * (float) $this->unit_cost, 2);
+    }
+
+    /**
+     * ⚠️ THE LEDGER (#30). Stock is not a number, it is the sum of these lines —
+     * delete one and every quantity after it becomes a fiction that
+     * `pos:check-integrity` will report and nobody will be able to explain.
+     * A mistake is corrected by posting the opposite movement.
+     */
+    public function isDeletableRecord(): bool
+    {
+        return false;
     }
 }

@@ -24,16 +24,27 @@ namespace App\Support;
 final class LimitRegistry
 {
     public const PRODUCTS = 'limits.products';
+
     public const CATEGORIES = 'limits.categories';
+
     public const BRANDS = 'limits.brands';
+
     public const CUSTOMERS = 'limits.customers';
+
     public const SUPPLIERS = 'limits.suppliers';
+
     public const EMPLOYEES = 'limits.employees';
+
     public const BRANCHES = 'limits.branches';
+
     public const POS_COUNTERS = 'limits.pos_counters';
+
     public const WAREHOUSES = 'limits.warehouses';
+
     public const INVOICES_PER_MONTH = 'limits.invoices_per_month';
+
     public const SMS_PER_MONTH = 'limits.sms_per_month';
+
     public const STORAGE_MB = 'limits.storage_mb';
 
     /**

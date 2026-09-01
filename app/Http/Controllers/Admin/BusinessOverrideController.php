@@ -11,6 +11,8 @@ use App\Models\Limit;
 use App\Services\AuditService;
 use App\Services\FeatureService;
 use App\Services\PlanLimitService;
+use App\Support\FeatureRegistry;
+use App\Support\LimitRegistry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -45,8 +47,8 @@ class BusinessOverrideController extends Controller
             'subscription' => $business->currentSubscription,
             'featureGroups' => Feature::query()->where('is_active', true)->ordered()->get()->groupBy('group'),
             'limitGroups' => Limit::query()->where('is_active', true)->ordered()->get()->groupBy('group'),
-            'featureGroupLabels' => \App\Support\FeatureRegistry::groupLabels(),
-            'limitGroupLabels' => \App\Support\LimitRegistry::groupLabels(),
+            'featureGroupLabels' => FeatureRegistry::groupLabels(),
+            'limitGroupLabels' => LimitRegistry::groupLabels(),
             // Effective answers (plan + overrides applied) so the operator sees
             // the outcome, not just the raw rows.
             'effectiveFeatures' => $this->features->all($business),

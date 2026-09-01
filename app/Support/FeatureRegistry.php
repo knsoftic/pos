@@ -24,83 +24,128 @@ final class FeatureRegistry
 {
     // ------------------------------------------------------------------- POS
     public const POS_TERMINAL = 'pos.terminal';
+
     public const POS_HOLD_SALES = 'pos.hold_sales';
+
     public const POS_SPLIT_PAYMENT = 'pos.split_payment';
+
     public const POS_BARCODE_SCANNER = 'pos.barcode_scanner';
+
     public const POS_CUSTOMER_DISPLAY = 'pos.customer_display';
+
     public const POS_OFFLINE_MODE = 'pos.offline_mode';
+
     public const POS_MULTI_COUNTER = 'pos.multi_counter';
 
     // ------------------------------------------------------------- inventory
     public const INVENTORY_STOCK_TRACKING = 'inventory.stock_tracking';
+
     public const INVENTORY_TRANSFERS = 'inventory.transfers';
+
     public const INVENTORY_ADJUSTMENTS = 'inventory.adjustments';
+
     public const INVENTORY_STOCK_TAKE = 'inventory.stock_take';
+
     public const INVENTORY_LOW_STOCK_ALERTS = 'inventory.low_stock_alerts';
+
     public const INVENTORY_EXPIRY_TRACKING = 'inventory.expiry_tracking';
+
     public const INVENTORY_MULTI_WAREHOUSE = 'inventory.multi_warehouse';
 
     // --------------------------------------------------------------- catalog
     public const CATALOG_VARIANTS = 'catalog.variants';
+
     public const CATALOG_SERIAL_NUMBERS = 'catalog.serial_numbers';
+
     public const CATALOG_BATCH_TRACKING = 'catalog.batch_tracking';
+
     public const CATALOG_MULTI_UNIT = 'catalog.multi_unit';
+
     public const CATALOG_IMPORT = 'catalog.import';
 
     // ----------------------------------------------------------------- sales
     public const SALES_INVOICING = 'sales.invoicing';
+
     public const SALES_QUOTATIONS = 'sales.quotations';
+
     public const SALES_RETURNS = 'sales.returns';
+
     public const SALES_CREDIT_SALES = 'sales.credit_sales';
+
     public const SALES_DISCOUNTS = 'sales.discounts';
+
     public const SALES_TAX = 'sales.tax';
+
     public const SALES_DELIVERY_NOTES = 'sales.delivery_notes';
 
     // ------------------------------------------------------------- purchases
     public const PURCHASES_ORDERS = 'purchases.orders';
+
     public const PURCHASES_RETURNS = 'purchases.returns';
+
     public const PURCHASES_SUPPLIER_LEDGER = 'purchases.supplier_ledger';
 
     // ------------------------------------------------------------ accounting
     public const ACCOUNTING_EXPENSES = 'accounting.expenses';
+
     public const ACCOUNTING_CUSTOMER_LEDGER = 'accounting.customer_ledger';
+
     public const ACCOUNTING_CASH_REGISTER = 'accounting.cash_register';
+
     public const ACCOUNTING_MULTI_CURRENCY = 'accounting.multi_currency';
+
     public const ACCOUNTING_PROFIT_LOSS = 'accounting.profit_loss';
 
     // --------------------------------------------------------------- reports
     public const REPORTS_BASIC = 'reports.basic';
+
     public const REPORTS_ADVANCED = 'reports.advanced';
+
     public const REPORTS_EXPORT_PDF = 'reports.export_pdf';
+
     public const REPORTS_EXPORT_EXCEL = 'reports.export_excel';
+
     public const REPORTS_SCHEDULED_EMAIL = 'reports.scheduled_email';
+
     public const REPORTS_DASHBOARD_CHARTS = 'reports.dashboard_charts';
 
     // ------------------------------------------------------------------ team
     public const TEAM_MULTI_USER = 'team.multi_user';
+
     public const TEAM_ROLES = 'team.roles';
+
     public const TEAM_ATTENDANCE = 'team.attendance';
+
     public const TEAM_COMMISSION = 'team.commission';
+
     public const TEAM_ACTIVITY_LOG = 'team.activity_log';
 
     // -------------------------------------------------------------- branches
     public const BRANCHES_MULTI_BRANCH = 'branches.multi_branch';
+
     public const BRANCHES_CONSOLIDATED_REPORTS = 'branches.consolidated_reports';
 
     // ------------------------------------------------------------- customers
     public const CUSTOMERS_MANAGEMENT = 'customers.management';
+
     public const CUSTOMERS_LOYALTY = 'customers.loyalty';
+
     public const CUSTOMERS_SMS = 'customers.sms';
+
     public const CUSTOMERS_WHATSAPP = 'customers.whatsapp';
 
     // -------------------------------------------------------------- settings
     public const SETTINGS_CUSTOM_INVOICE = 'settings.custom_invoice';
+
     public const SETTINGS_CUSTOM_LOGO = 'settings.custom_logo';
+
     public const SETTINGS_BACKUP = 'settings.backup';
+
     public const SETTINGS_API_ACCESS = 'settings.api_access';
 
     // -------------------------------------------------------------------- UI
     public const UI_DARK_MODE = 'ui.dark_mode';
+
     public const UI_MULTI_LANGUAGE = 'ui.multi_language';
 
     /**

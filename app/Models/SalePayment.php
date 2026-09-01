@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\ProtectsFinancialRecords;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -16,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class SalePayment extends Model
 {
-    use BelongsToTenant, HasFactory;
+    use BelongsToTenant, HasFactory, ProtectsFinancialRecords;
 
     /** @var list<string> */
     protected $guarded = [];
@@ -60,5 +61,14 @@ class SalePayment extends Model
     public function label(): string
     {
         return str($this->method)->headline()->toString();
+    }
+
+    /**
+     * Money that changed hands. Never deleted: the drawer already counted it,
+     * and a payment that vanishes makes the sale it settled unpayable.
+     */
+    public function isDeletableRecord(): bool
+    {
+        return false;
     }
 }

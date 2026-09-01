@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\SaleStatus;
 use App\Models\Concerns\BelongsToBranch;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\ProtectsFinancialRecords;
 use App\Services\SaleService;
 use Database\Factories\SaleFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -26,7 +27,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Sale extends Model
 {
     /** @use HasFactory<SaleFactory> */
-    use BelongsToBranch, BelongsToTenant, HasFactory;
+    use BelongsToBranch, BelongsToTenant, HasFactory, ProtectsFinancialRecords;
 
     /** @var list<string> */
     protected $guarded = [];
@@ -262,5 +263,18 @@ class Sale extends Model
     public function canBeVoided(): bool
     {
         return $this->status->canBeVoided() && ! $this->hasReturns();
+    }
+
+    /**
+     * ⚠️ HELD ONLY, and that distinction is the whole rule (#198).
+     *
+     * A held sale is a basket: it posted no stock, no ledger line and no
+     * money, so abandoning one is correct and `pos:expire-holds` does it
+     * nightly. A completed sale is a document somebody was handed — it is
+     * voided, and the record stays. Same table, opposite answers.
+     */
+    public function isDeletableRecord(): bool
+    {
+        return $this->status->canBeDeleted();
     }
 }

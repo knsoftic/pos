@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Enums\ExpiryBehavior;
 use App\Services\SubscriptionService;
+use App\Support\TenantContext;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -11,7 +12,7 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Gate every tenant request on a live subscription (#79, #127, #187 layer 1).
  *
- * Runs AFTER `tenant`, so {@see \App\Support\TenantContext} is already resolved
+ * Runs AFTER `tenant`, so {@see TenantContext} is already resolved
  * from the authenticated user — this middleware never reads a business from the
  * request.
  *

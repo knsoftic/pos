@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\FeatureRegistry;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -9,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * A gate-able capability (#128). Operator-owned catalog row; the canonical list
- * of codes lives in {@see \App\Support\FeatureRegistry}, which seeds this table.
+ * of codes lives in {@see FeatureRegistry}, which seeds this table.
  */
 class Feature extends Model
 {

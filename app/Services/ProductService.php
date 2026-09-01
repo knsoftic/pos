@@ -12,6 +12,7 @@ use App\Models\ProductVariant;
 use App\Models\Unit;
 use App\Support\FeatureRegistry;
 use App\Support\LimitRegistry;
+use App\Support\Slug;
 use App\Support\TenantContext;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
@@ -554,7 +555,7 @@ class ProductService
 
     protected function uniqueSlug(string $name, ?int $ignoreId = null): string
     {
-        $base = Str::slug($name) ?: 'product';
+        $base = Slug::base($name, 180, 'product');
         $slug = $base;
         $i = 2;
 

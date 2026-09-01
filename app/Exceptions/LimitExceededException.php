@@ -3,6 +3,8 @@
 namespace App\Exceptions;
 
 use App\Support\LimitRegistry;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use RuntimeException;
@@ -50,7 +52,7 @@ class LimitExceededException extends RuntimeException
      * Rendered as 403 with the quota detail — a validation-style redirect for
      * normal form posts, JSON for API/XHR callers.
      */
-    public function render(Request $request): Response|\Illuminate\Http\JsonResponse|\Illuminate\Http\RedirectResponse
+    public function render(Request $request): Response|JsonResponse|RedirectResponse
     {
         if ($request->expectsJson()) {
             return response()->json([

@@ -5,9 +5,9 @@ namespace App\Services;
 use App\Models\Business;
 use App\Models\Role;
 use App\Support\PermissionRegistry as P;
+use App\Support\Slug;
 use App\Support\TenantContext;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 /**
  * Creating and editing roles, and seeding the presets a new business starts with
@@ -266,7 +266,9 @@ class RoleService
 
     protected function uniqueSlug(string $name, ?int $ignoreId = null): string
     {
-        $base = Str::slug($name) ?: 'role';
+        // 60-char column, and role names validate at 60 too — so the base has
+        // to make room for a collision suffix before the first attempt.
+        $base = Slug::base($name, 60, 'role');
         $slug = $base;
         $i = 2;
 

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\ProtectsFinancialRecords;
 use Database\Factories\StockTransferItemFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -17,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class StockTransferItem extends Model
 {
     /** @use HasFactory<StockTransferItemFactory> */
-    use HasFactory;
+    use HasFactory, ProtectsFinancialRecords;
 
     /** `quantity_received` is set only by the receiving flow, never by a form fill. */
     protected $fillable = [
@@ -85,5 +86,14 @@ class StockTransferItem extends Model
     {
         return $this->quantity_received !== null
             && (float) $this->quantity_received > (float) $this->quantity_sent + 0.00005;
+    }
+
+    /**
+     * Deletable while its transfer is still a draft, which is what lets the
+     * lines be replaced during editing.
+     */
+    public function isDeletableRecord(): bool
+    {
+        return $this->transfer?->canBeDeleted() ?? false;
     }
 }

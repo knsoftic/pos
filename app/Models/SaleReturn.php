@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToBranch;
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\ProtectsFinancialRecords;
 use Database\Factories\SaleReturnFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -23,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class SaleReturn extends Model
 {
     /** @use HasFactory<SaleReturnFactory> */
-    use BelongsToBranch, BelongsToTenant, HasFactory;
+    use BelongsToBranch, BelongsToTenant, HasFactory, ProtectsFinancialRecords;
 
     /** @var list<string> */
     protected $guarded = [];
@@ -169,5 +170,14 @@ class SaleReturn extends Model
         }
 
         return $parts === [] ? 'Nothing settled' : implode(' · ', $parts);
+    }
+
+    /**
+     * A return is its own document with its own date and reason (#198). Deleting
+     * one would silently restate the sale it refunded.
+     */
+    public function isDeletableRecord(): bool
+    {
+        return false;
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\LimitRegistry;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -9,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * A countable quota (#8, #129). Operator-owned catalog row; codes are declared
- * in {@see \App\Support\LimitRegistry}, which seeds this table.
+ * in {@see LimitRegistry}, which seeds this table.
  *
  * NULL = unlimited, throughout this layer. `default_unlimited` disambiguates
  * "NULL because unlimited" from "NULL because nobody configured it" — the

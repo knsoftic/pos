@@ -2,13 +2,15 @@
 
 namespace App\Enums;
 
+use App\Models\Subscription;
+
 /**
  * Lifecycle of a subscription row.
  *
  * IMPORTANT — stored vs. effective:
  *   `subscriptions.status` stores the operator's INTENT (trial / active /
  *   cancelled). Whether a subscription has actually run out is a function of
- *   dates, so it is always DERIVED via {@see \App\Models\Subscription::effectiveStatus()}
+ *   dates, so it is always DERIVED via {@see Subscription::effectiveStatus()}
  *   rather than trusted from the column. A stale row can therefore never let an
  *   expired tenant keep working, which is the whole point of enforcement (#79).
  */

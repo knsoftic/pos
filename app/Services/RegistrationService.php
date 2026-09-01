@@ -6,8 +6,8 @@ use App\Enums\BillingCycle;
 use App\Models\Business;
 use App\Models\Plan;
 use App\Models\User;
+use App\Support\Slug;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 /**
  * Somebody signing themselves up (#109).
@@ -176,7 +176,7 @@ class RegistrationService
      */
     protected function uniqueSlug(string $name): string
     {
-        $base = Str::slug($name) ?: 'shop';
+        $base = Slug::base($name, 255, 'shop');
         $slug = $base;
         $suffix = 2;
 
