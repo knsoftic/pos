@@ -110,10 +110,17 @@ git config --global --add safe.directory /www/wwwroot/pos.knbazaar.com
 ```bash
 cd /www/wwwroot/pos.knbazaar.com
 git init
-git remote add origin https://github.com/knsoftic/pos.git
+git remote add origin https://github.com/knsoftic/pos.git 2>/dev/null || git remote set-url origin https://github.com/knsoftic/pos.git
 git fetch origin
-git checkout -f -b master origin/master
+git reset --hard origin/master
+git branch --set-upstream-to=origin/master master
 ```
+
+Ye poora block **dobara chalaya ja sakta hai**. `git checkout -b master` na
+istemal karein — `git init` pehle hi `master` bana chuka hota hai, to wo
+`a branch named 'master' already exists` par ruk jata hai. `reset --hard`
+untracked files (aaPanel ki `.user.ini`, `index.html`, `404.html`) ko haath
+nahi lagata.
 
 ⚠️ Git root se chal raha hai, to jo files wo likhega wo **root** ki milkiyat
 mein hongi — jabke nginx aur PHP-FPM `www` se chalte hain. Isi liye **step 9 ka
