@@ -16,7 +16,7 @@
 | **Environment** | Windows 11 + XAMPP (PHP + MySQL/MariaDB) |
 | **Start Date** | 2026-08-25 |
 | **Demo logins** | [LOGIN_CREDENTIALS.md](LOGIN_CREDENTIALS.md) — seeded accounts (dev only, #191) |
-| **Current Status** | ✅ **Phase 6 MUKAMMAL (100%)** — Purchases + returns: order karne se kuch post nahi hota, stock aur supplier ka account **receipt** pe chalte hain (#119 ka poora transaction flow). Phases 0–6 mukammal. **KN Softic branding** poore system pe live. **440 tests / 1,395 assertions pass** (MySQL `pos_saas_test`). Build + browser verified, console zero errors. ➡️ **Next: Phase 7** (POS + Sales + Payments + Customer Ledger). |
+| **Current Status** | 🔄 **Phase 7 chal raha hai (~40%)** — **Sale engine mukammal**: #118 ke solah steps aik transaction mein, row-lock race protection (#70), split payments + change, credit sales, held sales, void, aur cash register (#46/#139). Baqi: POS screen, phir sales list + receipts. Phases 0–6 mukammal. **468 tests / 1,481 assertions pass** (MySQL `pos_saas_test`). ➡️ **Next: Phase 7 Session 2** — POS screen. |
 
 ---
 
@@ -43,7 +43,7 @@
 | **4** | Products + Categories + Brands + Units + Inventory | ✅ Ho gaya | 100% |
 | **5** | Customers + Suppliers (+ Ledgers) | ✅ Ho gaya | 100% |
 | **6** | Purchases + Supplier Ledger | ✅ Ho gaya | 100% |
-| **7** | POS + Sales + Payments + Customer Ledger | ⬜ Baqi | 0% |
+| **7** | POS + Sales + Payments + Customer Ledger | 🔄 Chal raha hai | ~40% |
 | **8** | Returns + Stock Adjustments + Transfers | ⬜ Baqi | 0% |
 | **9** | Expenses + Profit & Loss | ⬜ Baqi | 0% |
 | **10** | Reports | ⬜ Baqi | 0% |
@@ -52,7 +52,7 @@
 | **13** | Animations + UI Polish + Performance | ⬜ Baqi | 0% |
 | **14** | Security + Testing | 🔄 Chal raha hai | ~25% |
 | **15** | Deployment Preparation | ⬜ Baqi | 0% |
-| | **TOTAL PROGRESS** | 🟢 | **~54%** |
+| | **TOTAL PROGRESS** | 🟢 | **~57%** |
 
 ---
 
@@ -112,6 +112,62 @@ Poore project ka audit hua, **KN Softic ki professional branding** lagi, aik pur
 **⬜ Phase 4 mein ab sirf ye baqi:** batch + expiry tracking (#34) · barcode label printing (#27) · product image upload (#149) · CSV import/export (#150/#151).
 
 ➡️ **Next:** Phase 4 close (expiry + barcode + import/export), phir **Phase 5** — Customers + Suppliers + ledgers.
+
+
+### 2026-08-29 — Phase 7 (Session 1): Sale engine + cash register 🔄 (~40%)
+
+Phase 7 sab se bara module hai (27 items), is liye teen sessions mein: **engine → POS screen → receipts**. Ye session engine ka hai — jo sab se neeche hai aur jis pe baqi sab khara hoga.
+
+**✅ JO HO GAYA:**
+
+**1) `SaleService` — #118 ke solah steps, aik transaction mein**
+```
+1 kuch bechne ko hai?          9  invoice number (#22)
+2 branch, till, cash session   10 sale header
+3 customer (ya walk-in)        11 lines
+4 lines resolve                12 stock, ROW LOCK ke saath (#70)
+5 price + COST snapshot (#52)  13 payments (#17, #19)
+6 document totals              14 bacha hua customer ke khaate mein (#40)
+7 tenders validate (#19)       15 drawer ka figure (#46)
+8 ── transaction shuru ──      16 audit, commit
+```
+- **Aadhi sale sab se bura anjaam hai** — stock chala gaya magar invoice nahi, ya invoice ban gaya magar stock nahi — kyunke dukaan ko pata hi nahi chalta kaunsa aadha hua. Is liye sab kuch aik `DB::transaction` mein.
+- Test isay pin karta hai: **credit limit paar hone pe** (step 14) steps 9–13 bhi roll back hote hain — na sale, na stock movement, na invoice number kharch.
+
+**2) Step 12 wahan kyun hai jahan hai — race protection (#70)**
+- Stock **transaction ke andar** jata hai, `InventoryService` se, jo har shelf row pe **`lockForUpdate`** karta hai. **Wahi lock poori race protection hai:** do till aakhri unit bechne aayein to dono usi row pe queue karte hain, aur doosre ko "kuch nahi bacha" milta hai — dono kamyab nahi hote.
+- Pehle availability check karna aur baad mein deduct karna theek wahi gap chhorta jise lock band karta hai.
+
+**3) Cost shelf se snapshot hoti hai, catalogue se nahi (#52)**
+- Catalogue mein aik **nominal** cost hoti hai; shelf pe wo hoti hai jo is stock ki **asal** mein lagi. Line pe `unit_cost` usi waqt freeze ho jati hai.
+- Warna pichle mahine ka margin har dafa **is mahine** ki cost pe dobara nikalta aur chup-chaap badalta rehta.
+
+**4) Payment ka matlab — aur change kahan jata hai**
+- `sale_payments.amount` wo hai jo sale pe **apply** hua, na ke jo hath mein diya gaya. 850 ki sale pe 1,000 dene se **850 ka cash payment + 150 change** record hota hai.
+- Faida: `paid_total` total ke barabar rehta hai, **aur drawer ka hisab sacha rehta hai** — till ne 1,000 liye aur 150 wapas diye, yani wahi 850.
+- Change hamesha **cash** se nikalta hai — dukaan card payment ka hissa wapas nahi karti.
+
+**5) Split payment (#17, #19)** — `sale_payments` aik **table** hai, column nahi: aadha card aadha cash aam baat hai, aur din ke aakhir mein har method alag reconcile hona chahiye. `credit` bhi aik method hai magar wo **paisa nahi leta** — customer ka khaata charge karta hai. **Walk-in udhaar nahi le sakta** (kis se maangenge?).
+
+**6) Cash register (#46, #139)**
+- Session aik **trading period ko bracket** karta hai — isi liye "till short hai?" ka koi jawab banta hai: float + jo aaya − jo gaya = expected, aur counted se farq wo number hai jis ki dukaan ko parwah hai.
+- **Aik counter pe aik hi open session** — MySQL mein partial unique index nahi hota, is liye ye check transaction ke andar counter ki sessions lock kar ke hota hai.
+- `difference` **stamp** hoti hai, read pe derive nahi hoti: cash-up aik lamhe ka bayan hai, aur agle hafte koi sale void karne se pichle hafte ka shortfall chup-chaap nahi badalna chahiye.
+
+**7) Invoice numbering (#22)** — format config se: `{PREFIX}-{YYYY}{MM}-{SEQ:5}`, aur sequence ka scope business/branch/monthly. **Held sale invoice number kharch nahi karti** (`HOLD-00001`) — numbers sequential hain aur gap wo cheez hai jo tax inspector poochta hai.
+
+**8) ⚠️ Tests — 28 naye, sab PASS**
+`Sales/SaleEngineTest`: cash sale, invoice format, **shelf se cost**, line arithmetic, split payment, **change**, unknown method, credit remainder, **walk-in udhaar nahi le sakta**, credit limit pe **poori sale** refuse, stock se zyada bechna refuse, **aakhri unit sirf aik dafa**, service line bina stock ke, **FEFO batch**, held sale kuch post nahi karti, resume, discard, **void postings ulat deta hai aur record rakhta hai**, void ko reason chahiye, cash session mein cash sales, close pe difference, aik hi open session, paid in/out, recalculate, cash rounding, tenancy.
+
+**🐞 Aik cheez theek ki:** `resolveBranch()` ab **main branch pe fallback** karta hai (`InventoryService` ki tarah) — warna jo owner kisi branch mein park nahi hai wo bech hi nahi sakta tha.
+
+**Result: `php artisan test` → 468 tests / 1,481 assertions PASS**.
+
+**⬜ BAQI (Phase 7 ke agle do sessions):**
+- ⬜ **POS screen** — layout, instant search, barcode scan, categories, favourites, customer quick-add, cart, hold/resume UI, keyboard shortcuts, AJAX, double-submit prevention (#14–16, #20, #89–91, #122, #146–148)
+- ⬜ **Sales list + receipt** — filters/actions, 80mm/58mm/A4 invoice, print UX, reprint + audit, custom footer (#21, #23, #143–145)
+
+➡️ **Next: Phase 7 Session 2** — POS screen (engine tayyar hai, ab uske upar till banegi).
 
 
 ### 2026-08-29 — Phase 6 MUKAMMAL ✅ (Purchases + Supplier Ledger)
@@ -857,24 +913,24 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 - [ ] Loading states + double-submit prevention — #91
 
 ### Payments (`PaymentService`)
-- [ ] Default methods (Cash/Card/Bank/QR/Credit/Split) — #17
-- [ ] Custom payment methods (JazzCash, EasyPaisa...) — #17
+- [x] Default methods (Cash/Card/Bank/QR/Credit/Split) — #17 *(`config/pos.php` se — shop apna JazzCash/EasyPaisa bina deploy ke add karti hai; `credit` wo method hai jo paisa nahi leta, khaata charge karta hai)*
+- [x] Custom payment methods (JazzCash, EasyPaisa...) — #17 *(env-driven list; unknown method service level pe refuse hota hai)*
 - [ ] QR payment (plan-based, image + reference) — #18
-- [ ] Split payment (multi-method, must match total) — #19
+- [x] Split payment (multi-method, must match total) — #19 *(`sale_payments` aik **table** hai, column nahi — har method alag reconcile hota hai; kam para hissa khaate pe jata hai, aur walk-in udhaar nahi le sakta)*
 
-### Sales (`SaleService` — #184)
+### Sales (`SaleService` — #184) ✅ *service mukammal — + `CashSessionService`; dono khud stock ya balance nahi likhte, `InventoryService` aur `CustomerLedgerService` ko call karte hain*
 - [ ] Sales listing + filters + actions — #21
-- [ ] Configurable invoice number format — #22
+- [x] Configurable invoice number format — #22 *(`{PREFIX}-{YYYY}{MM}-{SEQ:5}` tokens; scope business/branch/monthly; **held sale invoice number kharch nahi karti** — gap wo cheez hai jo inspector poochta hai)*
 - [ ] Invoice/receipt (80mm/58mm/A4, customizable) — #23
-- [ ] **POS Sale DB transaction flow (16 steps, rollback on error)** — #118
-- [ ] Concurrency / stock race protection (locking) — #70
+- [x] **POS Sale DB transaction flow (16 steps, rollback on error)** — #118 *(solah steps `SaleService::complete()` ke docblock mein likhe hain; test sabit karta hai ke step 14 fail hone pe 9–13 bhi roll back hote hain)*
+- [x] Concurrency / stock race protection (locking) — #70 *(stock **transaction ke andar** `InventoryService` se jata hai jo shelf row pe `lockForUpdate` karta hai — wahi lock poori protection hai)*
 - [ ] Print UX (Print/New Sale/View, auto-print option) — #145
 - [ ] Invoice reprint (+ audit) — #143
 - [ ] Custom receipt footer — #144
 
 ### Cash Register
-- [ ] POS session link (open/close register) — #139
-- [ ] Cash management (opening/expected/actual/difference) — #46
+- [x] POS session link (open/close register) — #139 *(aik counter pe aik hi open session — MySQL mein partial unique index nahi hota, is liye check transaction mein lock ke saath)*
+- [x] Cash management (opening/expected/actual/difference) — #46 *(cash sales session mein live jama hoti hain; `difference` close pe **stamp** hoti hai — agle hafte ki void pichle hafte ka shortfall na badle; `recalculate()` payments se rebuild karta hai)*
 
 ---
 
@@ -989,13 +1045,13 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 - [x] Feature tests: Tenant Isolation — #116, #117 *(`TenantIsolationTest` — 16 tests: scoped reads/aggregates, cross-tenant `find()` → null, creating-hook force, mass-assignment, escape hatches, HTTP isolation)*
 - [x] Feature tests: Login + Permissions *(`Auth/AuthenticationTest` 22 + `Auth/PasswordResetTest` 11 + `Organization/RolePermissionTest` 31 — dono guards, cross-guard denial, throttle, enumeration safety, aur poora 3-layer permission check)* — #116
 - [x] Feature tests: Plan Limits, Plan Features — #116 *(`Subscription/PlanLimitTest` 29 + `Subscription/PlanFeatureTest` 21 — resolution order, unlimited, enforcement, cache invalidation, `CheckFeature` middleware)*
-- [ ] Feature tests: POS Sale — #116 · [x] **Stock Update** *(`Inventory/InventoryTest` 31 — ledger vs cache, negative stock, costing, per-branch isolation)*
+- [x] Feature tests: POS Sale — #116 *(`Sales/SaleEngineTest` 28 — solah steps ka rollback, race protection, split payments, credit limit, void)* · [x] **Stock Update** *(`Inventory/InventoryTest` 31 — ledger vs cache, negative stock, costing, per-branch isolation)*
 - [x] Feature tests: Purchase, Returns — #116 *(`Purchasing/PurchaseTest` 26 + `Purchasing/PurchaseAccessTest` 12 — receipt ka transaction flow, partial/double-count, over-delivery, returns ki limit, paanchon authorities)*
 - [x] Feature tests: Customer/Supplier Balance — #116 *(`Parties/PartyLedgerTest` 26 + `Parties/PartyAccessTest` 15 — dono taraf ka debit/credit, credit limits, blocking, statement ka foot karna, drift detection)*
 - [x] Feature tests: Subscription Expiry — #116 *(`Subscription/SubscriptionExpiryTest` 26 + `Subscription/SubscriptionGateTest` 22 — trial/grace/expiry, lock vs read-only vs pos-off, stale status column dono taraf se)*
 - [x] ⚠️ Tenant leak test (Business A → Business B URL = 403/404) — #117 *(cross-tenant PK `find()` → null; dashboard HTTP test dono tenants pe; request input se tenant switch block)*
 
-> **Ab tak ka test status:** `php artisan test` → **440 tests / 1,395 assertions PASS** (MySQL `pos_saas_test`) — Auth 22 · PasswordReset 11 · TenantIsolation 20 · PlanLimit 29 · PlanFeature 21 · SubscriptionExpiry 26 · SubscriptionGate 22 · RolePermission 31 · BranchAccess 19 · Employee 20 · Catalog 23 · Product 24 · Inventory 31 · StockTransfer 22 · BatchExpiry 17 · CatalogTools 22 · PartyLedger 26 · PartyAccess 15 · Purchase 26 · PurchaseAccess 12 · Unit 1. Har naye phase ke saath yahan tests barhte rahenge.
+> **Ab tak ka test status:** `php artisan test` → **468 tests / 1,481 assertions PASS** (MySQL `pos_saas_test`) — Auth 22 · PasswordReset 11 · TenantIsolation 20 · PlanLimit 29 · PlanFeature 21 · SubscriptionExpiry 26 · SubscriptionGate 22 · RolePermission 31 · BranchAccess 19 · Employee 20 · Catalog 23 · Product 24 · Inventory 31 · StockTransfer 22 · BatchExpiry 17 · CatalogTools 22 · PartyLedger 26 · PartyAccess 15 · Purchase 26 · PurchaseAccess 12 · SaleEngine 28 · Unit 1. Har naye phase ke saath yahan tests barhte rahenge.
 
 ---
 
