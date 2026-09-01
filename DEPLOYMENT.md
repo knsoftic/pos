@@ -21,7 +21,7 @@ hain ke aap unhein **pehchan** lein, debug karte na reh jayen.
 
 | Aap ko kya dikhega | Asal mein kya hai |
 |---|---|
-| Site khulti hai magar **bilkul styling nahi** — plain text, koi rang nahi | `public/build` git mein hai hi nahi. Fresh clone ke paas compiled assets nahi hote. **Step 6.** |
+| Site theek dikhti hai magar **naya kaam nazar nahi aata** — purana layout, purane rang | Compiled assets repo mein hain aur **stale** hain: kisi ne view/CSS badla aur `npm run build` kar ke commit karna bhool gaya. **Step 6.** |
 | `php artisan pos:backup` fail, ya `storage:link` chup-chaap kuch nahi karta | aaPanel default par `proc_open`, `symlink` aur `putenv` band rakhta hai. **Step 3.** |
 | Home page ke ilawa **har URL 404** | Run directory `/public` nahi hai, ya rewrite rules nahi lage. **Step 5.** |
 
@@ -285,28 +285,38 @@ Ye error na aaye to kuch karne ki zaroorat nahi.
 
 ---
 
-## 6. Front-end assets build karein
+## 6. Front-end assets
 
-**`public/build` repository mein hai hi nahi.** Fresh clone ke paas compiled CSS
-ya JS nahi hoti, aur jab tak ye na ho site plain text ki tarah dikhegi. Do mein
-se aik tareeqa chunein:
+**Kuch karne ki zaroorat nahi — assets repo mein aate hain.**
 
-**Option A — server par build karein** (*App Store → Node.js version manager* →
-Node 18+ install karein):
+`public/build` jaan boojh kar git mein rakha gaya hai, kyunke is server par Node
+nahi hai. Step 4 ka `git reset --hard origin/master` compiled CSS aur JS bhi le
+aata hai, aur deploy sirf `git pull` reh jata hai.
+
+Tasdeeq kar lein:
 
 ```bash
-cd /www/wwwroot/pos.knbazaar.com
-npm ci
-npm run build
+ls /www/wwwroot/pos.knbazaar.com/public/build/manifest.json
 ```
 
-**Option B — apni machine par build kar ke upload karein.** Apne computer par
-`npm run build` chalayein, phir poora `public/build` folder
-`/www/wwwroot/pos.knbazaar.com/public/build` par upload kar dein.
+### ⚠️ Iski qeemat, jo har baar deni hai
 
-Ye **har** us deploy ke baad dobara karna hai jismein koi Blade view ya CSS
-badla ho — Tailwind v4 templates ko *build time* par scan karta hai, to jo class
-kabhi build hi nahi hui wo mojood hi nahi.
+Ye faisla aik zimmedari **apni machine par** daal deta hai: **jab bhi koi Blade
+view ya CSS badle**, wahan `npm run build` chala kar nateeja commit karna hoga.
+
+```bash
+npm run build && git add public/build && git commit -m "assets rebuild" && git push
+```
+
+Bhool gaye to server par assets **mojood** honge magar **puraane** — aur ye
+ghayab assets se **bura** hai: ghayab hon to page saaf tor par toota dikhta hai
+aur banda foran samajh jata hai; puraane hon to page theek lagta hai aur
+chup-chaap ghalat hota hai. Tailwind v4 templates ko *build time* par scan karta
+hai, is liye jo class kabhi build hi nahi hui wo mojood hi nahi.
+
+> Kabhi server par Node aa jaye to `.gitignore` se `public/build` wapas ignore
+> kar dein aur wahin `npm ci && npm run build` chala lein — phir ye zimmedari
+> khatam.
 
 ---
 
@@ -493,17 +503,18 @@ dein. `files/public/` ko wapas `storage/app/public/` par copy kar dein.
 
 ## Baad mein update deploy karna
 
+**Pehle apni machine par**, agar koi view ya CSS badla ho:
+
+```bash
+npm run build && git add public/build && git commit -m "assets rebuild" && git push
+```
+
+**Phir server par:**
+
 ```bash
 cd /www/wwwroot/pos.knbazaar.com
 git pull
 composer install --no-dev --optimize-autoloader
-```
-
-```bash
-npm ci && npm run build
-```
-
-```bash
 $PHP artisan migrate --force
 $PHP artisan optimize
 chown -R www:www storage bootstrap/cache
@@ -513,8 +524,7 @@ chown -R www:www storage bootstrap/cache
 $PHP artisan pos:preflight
 ```
 
-Agar koi view ya CSS badla ho to `npm run build` optional nahi — Tailwind
-templates ko build time par scan karta hai.
+Server par `npm` ki zaroorat nahi — assets `git pull` ke saath aate hain (step 6).
 
 ---
 
@@ -522,7 +532,8 @@ templates ko build time par scan karta hai.
 
 | Alamat | Kahan dekhein |
 |---|---|
-| Bina styling ka page | Step 6. `ls public/build` — agar khali hai to yehi wajah hai. |
+| Bina styling ka page | `ls public/build` — khali ho to `git pull` adhoora chala. |
+| Naya kaam nazar nahi aa raha, purana layout | Assets stale hain. Apni machine par `npm run build`, commit, push, phir server par `git pull`. |
 | `/` ke ilawa har route par 404 | Step 5 — run directory aur rewrite rules. |
 | Har page par 500 | `storage/logs/laravel.log`. Aksar permissions (step 9) ya ghayab `APP_KEY`. |
 | 500 page par chhota sa code | Wo code `storage/logs/security.log` mein asli stack trace ke saath mojood hai. Usay grep karein. |
