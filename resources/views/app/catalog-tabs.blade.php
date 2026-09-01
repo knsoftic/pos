@@ -12,11 +12,14 @@
         ['label' => 'Categories', 'route' => 'app.categories.index', 'permission' => PermissionRegistry::CATALOG_MANAGE],
         ['label' => 'Brands',     'route' => 'app.brands.index',     'permission' => PermissionRegistry::CATALOG_MANAGE],
         ['label' => 'Units',      'route' => 'app.units.index',      'permission' => PermissionRegistry::CATALOG_MANAGE],
+        ['label' => 'Labels',     'route' => 'app.products.labels',  'permission' => PermissionRegistry::PRODUCTS_VIEW, 'requires' => 'app.products.labels'],
+        ['label' => 'Import / Export', 'route' => 'app.products.import', 'permission' => PermissionRegistry::PRODUCTS_IMPORT],
     ];
 @endphp
 
 <div class="mb-5 flex flex-wrap items-center gap-1 border-b border-slate-200 dark:border-slate-800">
     @foreach ($tabs as $tab)
+        @continue(isset($tab['requires']) && ! Route::has($tab['requires']))
         @can($tab['permission'])
             @php $active = request()->routeIs(str_replace('.index', '.*', $tab['route'])); @endphp
             <a href="{{ route($tab['route']) }}"

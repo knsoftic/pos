@@ -4,7 +4,9 @@ namespace App\Providers;
 
 use App\Listeners\AuthEventSubscriber;
 use App\Models\User;
+use App\Services\FeatureService;
 use App\Services\PermissionService;
+use App\Services\PlanLimitService;
 use App\Support\BranchContext;
 use App\Support\PermissionRegistry;
 use App\Support\TenantContext;
@@ -26,6 +28,22 @@ class AppServiceProvider extends ServiceProvider
         // Which branches the current user may reach (#48). Same lifetime and the
         // same rule: resolved from the authenticated user, never from input.
         $this->app->singleton(BranchContext::class);
+
+        /*
+         | The entitlement services memoise their resolved maps for the life of
+         | the request, and each exposes a flush() for when a plan or an override
+         | changes (#10, #96). Those two facts only work together if EVERYONE
+         | shares one instance: with a fresh instance per injection, an override
+         | screen could flush its own copy while the layout rendering the same
+         | page kept a stale one, and answer the same entitlement question two
+         | different ways.
+         |
+         | `scoped`, not `singleton`: one instance per request or queued job, so a
+         | long-lived worker never carries one tenant's entitlements into the
+         | next tenant's job.
+         */
+        $this->app->scoped(FeatureService::class);
+        $this->app->scoped(PlanLimitService::class);
     }
 
     /**

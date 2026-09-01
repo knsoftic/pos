@@ -14,7 +14,9 @@ use App\Support\FeatureRegistry;
 use App\Support\LimitRegistry;
 use App\Support\TenantContext;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
@@ -70,9 +72,16 @@ class ProductService
                 'tax_rate' => $this->nullableNumber($data['tax_rate'] ?? null),
                 // A service can never carry stock, whatever the form said (#25).
                 'track_inventory' => $type->tracksStock() && (bool) ($data['track_inventory'] ?? true),
+                // Batches only make sense on something that carries stock, and
+                // only when the plan includes them (#34).
+                'tracks_batches' => $this->resolveBatchTracking($type, $data),
                 'alert_quantity' => $this->nullableNumber($data['alert_quantity'] ?? null),
                 'is_active' => $data['is_active'] ?? true,
             ]);
+
+            if (($upload = $data['image'] ?? null) instanceof UploadedFile) {
+                $product->image_path = $this->storeImage($upload);
+            }
 
             $product->slug = $this->uniqueSlug($data['name']);
             $product->sku = $this->allocateSku($data['sku'] ?? null, $data['name']);
@@ -123,10 +132,22 @@ class ProductService
                 'selling_price' => $this->money($data['selling_price'] ?? 0),
                 'tax_rate' => $this->nullableNumber($data['tax_rate'] ?? null),
                 'track_inventory' => $type->tracksStock() && (bool) ($data['track_inventory'] ?? true),
+                'tracks_batches' => $this->resolveBatchTracking($type, $data),
                 'alert_quantity' => $this->nullableNumber($data['alert_quantity'] ?? null),
             ]);
 
-            if (array_key_exists('image_path', $data)) {
+            /*
+             | An image is REPLACED, not accumulated: the old file is deleted the
+             | moment a new one lands, because orphaned uploads are how a disk
+             | quietly fills up over a year. Removing the picture deletes it too.
+             */
+            if (($upload = $data['image'] ?? null) instanceof UploadedFile) {
+                $this->deleteImage($product->image_path);
+                $product->image_path = $this->storeImage($upload);
+            } elseif ($data['remove_image'] ?? false) {
+                $this->deleteImage($product->image_path);
+                $product->image_path = null;
+            } elseif (array_key_exists('image_path', $data)) {
                 $product->image_path = $data['image_path'];
             }
 
@@ -193,10 +214,16 @@ class ProductService
 
         $name = $product->name;
 
+        $imagePath = $product->image_path;
+
         DB::transaction(function () use ($product): void {
             $product->variants()->delete();
             $product->delete();
         });
+
+        // Only once the row is really gone — a rolled-back delete must not take
+        // the picture with it.
+        $this->deleteImage($imagePath);
 
         $this->limits->flush();
         $this->audit->log('product.deleted', $product, "Product \"{$name}\" deleted.");
@@ -431,6 +458,32 @@ class ProductService
 
     // ------------------------------------------------------------- internals
 
+    /**
+     * Store an uploaded image and return its path (#149, #101).
+     *
+     * `store()` names the file randomly, so the caller never chooses where it
+     * lands and cannot overwrite another tenant's picture. The tenant id is in
+     * the folder purely to keep the directory browsable by a human.
+     */
+    protected function storeImage(UploadedFile $file): string
+    {
+        $businessId = $this->tenant->businessId() ?? 0;
+
+        return $file->store(
+            config('uploads.products.path').'/'.$businessId,
+            config('uploads.products.disk'),
+        );
+    }
+
+    protected function deleteImage(?string $path): void
+    {
+        if (blank($path)) {
+            return;
+        }
+
+        Storage::disk(config('uploads.products.disk'))->delete($path);
+    }
+
     protected function resolveType(mixed $type): ProductType
     {
         if ($type instanceof ProductType) {
@@ -438,6 +491,26 @@ class ProductService
         }
 
         return ProductType::tryFrom((string) $type) ?? ProductType::Standard;
+    }
+
+    /**
+     * Batch tracking needs three things to be true at once: the product carries
+     * stock, the shop asked for it, and the plan includes it (#34). Silently
+     * storing "true" on a plan without the feature would mean the flag springs
+     * to life on an upgrade, which nobody asked for.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function resolveBatchTracking(ProductType $type, array $data): bool
+    {
+        if (! $type->tracksStock() || ! (bool) ($data['tracks_batches'] ?? false)) {
+            return false;
+        }
+
+        return $this->features->anyOf([
+            FeatureRegistry::INVENTORY_EXPIRY_TRACKING,
+            FeatureRegistry::CATALOG_BATCH_TRACKING,
+        ]);
     }
 
     protected function assertVariantsAllowed(ProductType $type): void

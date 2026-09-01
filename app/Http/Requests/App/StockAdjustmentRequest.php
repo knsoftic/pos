@@ -44,6 +44,13 @@ class StockAdjustmentRequest extends FormRequest
 
             'reason' => ['required', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:1000'],
+
+            // Batch details, for products that track them (#34). Only meaningful
+            // when stock is being ADDED — you cannot invent an expiry date for
+            // stock that is leaving.
+            'batch_number' => ['nullable', 'string', 'max:60'],
+            'expiry_date' => ['nullable', 'date', 'after_or_equal:today'],
+            'batch_id' => ['nullable', 'integer'],
         ];
     }
 
@@ -53,6 +60,7 @@ class StockAdjustmentRequest extends FormRequest
             'quantity.not_in' => 'An adjustment of zero would change nothing.',
             'reason.required' => 'Say why the figure is changing — this goes on the record.',
             'product_id.exists' => 'Choose one of your own products.',
+            'expiry_date.after_or_equal' => 'An expiry date in the past means the stock is already expired — record it as a loss instead.',
             'branch_id.exists' => 'Choose one of your own branches.',
         ];
     }

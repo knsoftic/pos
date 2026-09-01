@@ -5,16 +5,22 @@ namespace Database\Seeders;
 use App\Enums\BillingCycle;
 use App\Models\Admin;
 use App\Models\Business;
+use App\Models\Branch;
+use App\Models\BusinessFeatureOverride;
+use App\Models\Feature;
 use App\Models\Plan;
 use App\Models\Product;
+use App\Models\StockBatch;
 use App\Models\Role;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\CatalogService;
+use App\Services\FeatureService;
 use App\Services\InventoryService;
 use App\Services\OrganizationProvisioner;
 use App\Services\ProductService;
 use App\Services\SubscriptionService;
+use App\Support\FeatureRegistry;
 use App\Support\TenantContext;
 use Illuminate\Database\Seeder;
 
@@ -129,7 +135,7 @@ class DatabaseSeeder extends Seeder
      */
     protected function seedCatalog(Business $store): void
     {
-        app(TenantContext::class)->runFor($store, function (): void {
+        app(TenantContext::class)->runFor($store, function () use ($store): void {
             $catalog = app(CatalogService::class);
             $products = app(ProductService::class);
 
@@ -179,8 +185,92 @@ class DatabaseSeeder extends Seeder
                 'selling_price' => 250,
             ]);
 
+            /*
+             | A perishable, so the demo has something to show on the expiry
+             | screen (#34). Professional does not include expiry tracking, so
+             | the store gets a per-business OVERRIDE (#10) — which is exactly
+             | what overrides are for, and demonstrates both features at once.
+             */
+            $this->enableExpiryTrackingFor($store);
+
+            $milk = $products->create([
+                'name' => 'Fresh Milk 1L',
+                'category_id' => $cold->id,
+                'unit_id' => $piece?->id,
+                'cost_price' => 180,
+                'selling_price' => 240,
+                'alert_quantity' => 12,
+                'tracks_batches' => true,
+                'generate_barcode' => true,
+            ]);
+
             $this->seedOpeningStock();
+            $this->seedMilkBatches($store, $milk);
         });
+    }
+
+    /**
+     * Turn on expiry tracking for one business (#10, #34).
+     *
+     * An operator override rather than a plan change: the demo store is on
+     * Professional, and rewriting what Professional includes just to make the
+     * seed data richer would quietly change every tenant's entitlements.
+     */
+    protected function enableExpiryTrackingFor(Business $store): void
+    {
+        $feature = Feature::query()->where('code', FeatureRegistry::INVENTORY_EXPIRY_TRACKING)->first();
+
+        if ($feature === null) {
+            return;
+        }
+
+        BusinessFeatureOverride::query()->updateOrCreate(
+            ['business_id' => $store->id, 'feature_id' => $feature->id],
+            ['is_enabled' => true, 'reason' => 'Trialling perishables for this customer.'],
+        );
+
+        app(FeatureService::class)->flush($store);
+    }
+
+    /**
+     * Three batches of milk: one already gone off, one close, one fine — so the
+     * expiry screen has all three states to show on a fresh install.
+     */
+    protected function seedMilkBatches(Business $store, Product $milk): void
+    {
+        $branch = Branch::query()->where('is_main', true)->first();
+
+        if ($branch === null) {
+            return;
+        }
+
+        $inventory = app(InventoryService::class);
+
+        $inventory->createMovement([
+            'product' => $milk, 'branch_id' => $branch->id, 'type' => 'purchase',
+            'quantity' => 24, 'unit_cost' => 180,
+            'batch_number' => 'MLK-2609', 'expiry_date' => now()->addDays(6)->toDateString(),
+        ]);
+
+        $inventory->createMovement([
+            'product' => $milk, 'branch_id' => $branch->id, 'type' => 'purchase',
+            'quantity' => 18, 'unit_cost' => 185,
+            'batch_number' => 'MLK-2702', 'expiry_date' => now()->addDays(21)->toDateString(),
+        ]);
+
+        // An already-expired batch cannot be received through the normal path —
+        // the form refuses a past date — so this one is placed directly.
+        $expired = new StockBatch([
+            'branch_id' => $branch->id,
+            'product_id' => $milk->id,
+            'batch_number' => 'MLK-2519',
+            'expiry_date' => now()->subDays(3)->toDateString(),
+            'unit_cost' => 175,
+            'received_at' => now()->subDays(20),
+        ]);
+        $expired->business_id = $store->id;
+        $expired->quantity = 5;
+        $expired->save();
     }
 
     /**

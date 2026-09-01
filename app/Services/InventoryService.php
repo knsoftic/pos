@@ -8,6 +8,7 @@ use App\Models\Branch;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Stock;
+use App\Models\StockBatch;
 use App\Models\StockMovement;
 use App\Support\BranchContext;
 use App\Support\FeatureRegistry;
@@ -216,11 +217,17 @@ class InventoryService
             $stock->last_movement_at = now();
             $stock->save();
 
+            // The batch breakdown moves in the SAME transaction as the shelf
+            // total, so the two can never disagree (#34). A product that does
+            // not track batches simply gets null here and nothing else changes.
+            $batch = $this->applyToBatch($product, $variantId, $branchId, $signed, $unitCost, $data);
+
             $movement = new StockMovement([
                 'business_id' => $stock->business_id,
                 'branch_id' => $branchId,
                 'product_id' => $product->id,
                 'product_variant_id' => $variantId,
+                'stock_batch_id' => $batch?->id,
                 'type' => $type,
                 'quantity' => $signed,
                 'unit_cost' => $signed > 0 ? $unitCost : (float) $stock->average_cost,
@@ -242,6 +249,219 @@ class InventoryService
         });
     }
 
+    // ------------------------------------------------------- batches & expiry
+
+    /**
+     * Take stock off a shelf, batch by batch, first-expiry-first-out (#34).
+     *
+     * For a product that tracks batches this writes ONE LEDGER LINE PER BATCH
+     * consumed rather than a single line with a footnote — so every line still
+     * answers "how many, from which batch, at what cost" on its own, and a
+     * recall can be traced through the ledger.
+     *
+     * For everything else it is exactly one ordinary movement, so callers never
+     * have to ask which kind of product they are holding.
+     *
+     * @param  array<string, mixed>  $data
+     * @return list<StockMovement>
+     */
+    public function issue(array $data): array
+    {
+        $product = $this->resolveProduct($data['product']);
+
+        if (! $this->tracksBatches($product)) {
+            return [$this->createMovement($data)];
+        }
+
+        $variantId = $this->resolveVariantId($product, $data['variant_id'] ?? null);
+        $branchId = $this->resolveBranchId($data['branch_id'] ?? null);
+        $wanted = round(abs((float) $data['quantity']), 4);
+
+        $batches = StockBatch::query()
+            ->allBranches()
+            ->where('branch_id', $branchId)
+            ->where('product_id', $product->id)
+            ->when($variantId === null,
+                fn (Builder $q) => $q->whereNull('product_variant_id'),
+                fn (Builder $q) => $q->where('product_variant_id', $variantId),
+            )
+            ->remaining()
+            ->fefo()
+            ->get();
+
+        $movements = [];
+        $outstanding = $wanted;
+
+        foreach ($batches as $batch) {
+            if ($outstanding <= 0) {
+                break;
+            }
+
+            $take = min($outstanding, (float) $batch->quantity);
+
+            $movements[] = $this->createMovement(array_merge($data, [
+                'quantity' => $take,
+                'batch_id' => $batch->id,
+                'unit_cost' => (float) $batch->unit_cost,
+            ]));
+
+            $outstanding = round($outstanding - $take, 4);
+        }
+
+        // More was asked for than any batch holds. Whether that is allowed at
+        // all is the negative-stock policy's call (#142), and createMovement
+        // has already made it for the batched part — so if we are still here,
+        // the remainder is posted without a batch and the shelf is told.
+        if ($outstanding > 0) {
+            $movements[] = $this->createMovement(array_merge($data, [
+                'quantity' => $outstanding,
+                'batch_id' => null,
+            ]));
+        }
+
+        return $movements;
+    }
+
+    /** Does this product carry batches, and does the plan allow them? */
+    public function tracksBatches(Product|int $product): bool
+    {
+        $product = $this->resolveProduct($product);
+
+        return (bool) $product->tracks_batches
+            && $product->tracksStock()
+            && $this->features->anyOf([
+                FeatureRegistry::INVENTORY_EXPIRY_TRACKING,
+                FeatureRegistry::CATALOG_BATCH_TRACKING,
+            ]);
+    }
+
+    /** Batches on the shelves this user can reach, newest expiry last. */
+    public function batches(?int $productId = null, ?int $branchId = null): Builder
+    {
+        return StockBatch::query()
+            ->with(['product:id,name,sku', 'variant:id,name', 'branch:id,name'])
+            ->remaining()
+            ->when($productId !== null, fn (Builder $q) => $q->where('product_id', $productId))
+            ->when($branchId !== null, fn (Builder $q) => $q->where('branch_id', $branchId))
+            ->fefo();
+    }
+
+    /** Stock that has already gone off — a shop needs this list first (#34). */
+    public function expiredBatches(?int $branchId = null): Builder
+    {
+        return $this->batches(null, $branchId)->expired();
+    }
+
+    /** Stock about to go off, within the configured warning window. */
+    public function expiringBatches(?int $days = null, ?int $branchId = null): Builder
+    {
+        $days ??= (int) config('inventory.expiry_warning_days', 30);
+
+        return $this->batches(null, $branchId)->expiringWithin($days);
+    }
+
+    /**
+     * What can actually be SOLD: expired stock is on the shelf but must not go
+     * out of the door, so it is excluded here even though `getAvailableStock()`
+     * still counts it. Two different questions, two different answers.
+     */
+    public function sellableStock(Product|int $product, ?int $variantId = null, ?int $branchId = null): float
+    {
+        $product = $this->resolveProduct($product);
+
+        if (! $this->tracksBatches($product)) {
+            return $this->getAvailableStock($product, $variantId, $branchId);
+        }
+
+        $branchId = $this->resolveBranchId($branchId);
+
+        return round((float) StockBatch::query()
+            ->where('product_id', $product->id)
+            ->when($variantId !== null, fn (Builder $q) => $q->where('product_variant_id', $variantId))
+            ->when($branchId !== null, fn (Builder $q) => $q->where('branch_id', $branchId))
+            ->remaining()
+            ->where(function (Builder $q): void {
+                $q->whereNull('expiry_date')
+                    ->orWhereDate('expiry_date', '>=', now()->toDateString());
+            })
+            ->sum('quantity'), 4);
+    }
+
+    /**
+     * Move a batch's quantity in step with the shelf.
+     *
+     * Incoming: the caller may name a batch/expiry, and one is found or created.
+     * Outgoing: the caller names which batch is being taken from — {@see issue()}
+     * works that out with FEFO so nothing else has to.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function applyToBatch(Product $product, ?int $variantId, int $branchId, float $signed, float $unitCost, array $data): ?StockBatch
+    {
+        if (! $this->tracksBatches($product)) {
+            return null;
+        }
+
+        $batch = null;
+
+        if (filled($data['batch_id'] ?? null)) {
+            $batch = StockBatch::query()->allBranches()->find((int) $data['batch_id']);
+
+            abort_if($batch === null, 422, 'That batch does not exist.');
+            abort_if($batch->product_id !== $product->id, 422, 'That batch belongs to another product.');
+        } elseif ($signed > 0) {
+            $expiry = filled($data['expiry_date'] ?? null) ? $data['expiry_date'] : null;
+            $number = filled($data['batch_number'] ?? null) ? trim((string) $data['batch_number']) : null;
+
+            // Same product, same shelf, same lot, same date → the same batch.
+            // Two deliveries that genuinely match are one batch, not two rows
+            // that split the shop's view of its own stock.
+            $batch = StockBatch::query()
+                ->allBranches()
+                ->where('branch_id', $branchId)
+                ->where('product_id', $product->id)
+                ->when($variantId === null,
+                    fn (Builder $q) => $q->whereNull('product_variant_id'),
+                    fn (Builder $q) => $q->where('product_variant_id', $variantId),
+                )
+                ->when($number === null, fn (Builder $q) => $q->whereNull('batch_number'), fn (Builder $q) => $q->where('batch_number', $number))
+                ->when($expiry === null, fn (Builder $q) => $q->whereNull('expiry_date'), fn (Builder $q) => $q->whereDate('expiry_date', $expiry))
+                ->lockForUpdate()
+                ->first();
+
+            if ($batch === null) {
+                $batch = new StockBatch([
+                    'branch_id' => $branchId,
+                    'product_id' => $product->id,
+                    'product_variant_id' => $variantId,
+                    'batch_number' => $number,
+                    'expiry_date' => $expiry,
+                    'unit_cost' => $unitCost,
+                    'received_at' => now(),
+                ]);
+                $batch->business_id = $this->tenant->businessId();
+                $batch->quantity = 0;
+            }
+        }
+
+        if ($batch === null) {
+            // Outgoing with no batch named — the caller went through
+            // createMovement() directly rather than issue(). The shelf still
+            // moves; the breakdown simply has nothing to attribute it to.
+            return null;
+        }
+
+        $batch->quantity = round((float) $batch->quantity + $signed, 4);
+
+        // A batch cannot hold less than nothing, whatever the shelf policy says:
+        // taking six from a batch of four is a mistake, not a negative batch.
+        abort_if($batch->quantity < 0, 422, 'That batch does not hold that many.');
+
+        $batch->save();
+
+        return $batch;
+    }
+
     /**
      * A manual correction, with a reason (#31).
      *
@@ -249,7 +469,7 @@ class InventoryService
      * required by the caller's validation, not optional politeness — an
      * unexplained stock change is how shrinkage hides.
      */
-    public function adjust(Product|int $product, float $quantity, string $reason, ?int $variantId = null, ?int $branchId = null, ?string $notes = null): StockMovement
+    public function adjust(Product|int $product, float $quantity, string $reason, ?int $variantId = null, ?int $branchId = null, ?string $notes = null, array $batch = []): StockMovement
     {
         $movement = $this->createMovement([
             'product' => $product,
@@ -259,6 +479,11 @@ class InventoryService
             'quantity' => $quantity,
             'reason' => $reason,
             'notes' => $notes,
+            // Adding batch-tracked stock carries its lot and expiry; taking it
+            // away names the batch it comes out of (#34).
+            'batch_number' => $batch['batch_number'] ?? null,
+            'expiry_date' => $batch['expiry_date'] ?? null,
+            'batch_id' => $batch['batch_id'] ?? null,
         ]);
 
         $this->audit->log(

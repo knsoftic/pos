@@ -44,6 +44,7 @@ class Product extends Model
         'selling_price',
         'tax_rate',
         'track_inventory',
+        'tracks_batches',
         'alert_quantity',
         'is_active',
     ];
@@ -58,6 +59,7 @@ class Product extends Model
             'tax_rate' => 'decimal:2',
             'alert_quantity' => 'decimal:4',
             'track_inventory' => 'boolean',
+            'tracks_batches' => 'boolean',
             'is_active' => 'boolean',
         ];
     }

@@ -6,7 +6,7 @@
     in ProductService, and cost is dropped by the form request when the user may
     not see it (#52).
 --}}
-@props(['product', 'categories', 'brands', 'units', 'types', 'canSeeCost', 'variantsEnabled', 'action', 'method' => 'POST'])
+@props(['product', 'categories', 'brands', 'units', 'types', 'canSeeCost', 'variantsEnabled', 'batchesEnabled' => false, 'action', 'method' => 'POST'])
 
 @php
     use App\Enums\ProductType;
@@ -27,7 +27,7 @@
         : []);
 @endphp
 
-<form method="POST" action="{{ $action }}" class="space-y-5"
+<form method="POST" action="{{ $action }}" class="space-y-5" enctype="multipart/form-data"
       x-data="{
           type: '{{ old('type', $product->exists ? $product->type->value : ProductType::Standard->value) }}',
           variants: @js(array_values($variantRows)),
@@ -123,6 +123,50 @@
                     Description <span class="text-slate-400">(optional)</span>
                 </label>
                 <textarea id="description" name="description" rows="2" maxlength="2000" class="input">{{ old('description', $product->description) }}</textarea>
+            </div>
+
+            {{-- Picture (#149). The preview is local — the file is not uploaded
+                 until the form is saved. --}}
+            <div class="md:col-span-2" x-data="{ preview: null }">
+                <span class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                    Picture <span class="text-slate-400">(optional)</span>
+                </span>
+
+                <div class="flex flex-wrap items-start gap-4">
+                    <span class="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800">
+                        <template x-if="preview">
+                            <img :src="preview" alt="" class="h-full w-full object-cover" />
+                        </template>
+                        <template x-if="! preview">
+                            <span>
+                                @if ($product->image_path)
+                                    <img src="{{ Storage::disk(config('uploads.products.disk'))->url($product->image_path) }}"
+                                         alt="{{ $product->name }}" class="h-20 w-20 object-cover" />
+                                @else
+                                    <x-icon name="products" class="h-7 w-7 text-slate-300 dark:text-slate-600" />
+                                @endif
+                            </span>
+                        </template>
+                    </span>
+
+                    <div class="min-w-0 flex-1 space-y-2">
+                        <input type="file" name="image" accept="image/jpeg,image/png,image/webp"
+                               class="input !py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium dark:file:bg-slate-700 dark:file:text-slate-200"
+                               @change="preview = $event.target.files[0] ? URL.createObjectURL($event.target.files[0]) : null" />
+
+                        <p class="text-xs text-slate-400">
+                            JPG, PNG or WebP · up to {{ round(config('uploads.products.max_kb') / 1024, 1) }} MB.
+                        </p>
+
+                        @if ($product->image_path)
+                            <label class="flex cursor-pointer items-center gap-2">
+                                <input type="checkbox" name="remove_image" value="1"
+                                       class="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500 dark:border-slate-600 dark:bg-slate-800" />
+                                <span class="text-xs text-slate-500 dark:text-slate-400">Remove the current picture</span>
+                            </label>
+                        @endif
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -272,6 +316,21 @@
                     </span>
                 </span>
             </label>
+
+            @if ($batchesEnabled)
+                <label class="flex cursor-pointer items-start gap-3" x-show="type !== '{{ ProductType::Service->value }}'" x-cloak>
+                    <input type="checkbox" name="tracks_batches" value="1"
+                           @checked(old('tracks_batches', $product->tracks_batches))
+                           class="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800" />
+                    <span>
+                        <span class="text-sm font-medium text-slate-800 dark:text-slate-200">Track batches &amp; expiry</span>
+                        <span class="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                            For perishables. Stock is then counted per delivery, and leaves by earliest expiry first —
+                            not by whichever arrived first (#34).
+                        </span>
+                    </span>
+                </label>
+            @endif
 
             <label class="flex cursor-pointer items-start gap-3">
                 <input type="checkbox" name="is_active" value="1"

@@ -55,11 +55,28 @@ class ProductRequest extends FormRequest
 
             'description' => ['nullable', 'string', 'max:2000'],
 
+            /*
+             | Product image (#149), guarded per #101. `image` makes the file
+             | prove it decodes as a picture, `mimes` reads the real content
+             | rather than the name it arrived with, and the dimension cap keeps
+             | a phone photo from becoming a poster. The stored filename is
+             | random, so nothing the caller sends decides where it lands.
+             */
+            'image' => [
+                'nullable', 'image',
+                'mimes:'.implode(',', config('uploads.products.image_mimes')),
+                'max:'.config('uploads.products.max_kb'),
+                'dimensions:max_width='.config('uploads.products.max_dimension')
+                    .',max_height='.config('uploads.products.max_dimension'),
+            ],
+            'remove_image' => ['boolean'],
+
             'cost_price' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
             'selling_price' => ['required', 'numeric', 'min:0', 'max:99999999'],
             'tax_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
 
             'track_inventory' => ['boolean'],
+            'tracks_batches' => ['boolean'],
             'alert_quantity' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
             'is_active' => ['boolean'],
 
@@ -83,7 +100,9 @@ class ProductRequest extends FormRequest
         $this->merge([
             'is_active' => $this->boolean('is_active'),
             'track_inventory' => $this->boolean('track_inventory'),
+            'tracks_batches' => $this->boolean('tracks_batches'),
             'generate_barcode' => $this->boolean('generate_barcode'),
+            'remove_image' => $this->boolean('remove_image'),
         ]);
     }
 
@@ -96,6 +115,16 @@ class ProductRequest extends FormRequest
                 $validator->errors()->add('variants', 'A variable product needs at least one variant.');
             }
         });
+    }
+
+    public function messages(): array
+    {
+        return [
+            'image.image' => 'That file is not a picture.',
+            'image.mimes' => 'Use a JPG, PNG or WebP image.',
+            'image.max' => 'That image is larger than '.round(config('uploads.products.max_kb') / 1024, 1).' MB.',
+            'image.dimensions' => 'That image is bigger than '.config('uploads.products.max_dimension').' pixels on a side.',
+        ];
     }
 
     /**
@@ -116,10 +145,19 @@ class ProductRequest extends FormRequest
             'selling_price' => $this->input('selling_price'),
             'tax_rate' => $this->input('tax_rate'),
             'track_inventory' => $this->boolean('track_inventory'),
+            'tracks_batches' => $this->boolean('tracks_batches'),
             'alert_quantity' => $this->input('alert_quantity'),
             'is_active' => $this->boolean('is_active'),
             'generate_barcode' => $this->boolean('generate_barcode'),
         ];
+
+        if ($this->hasFile('image')) {
+            $data['image'] = $this->file('image');
+        }
+
+        if ($this->boolean('remove_image')) {
+            $data['remove_image'] = true;
+        }
 
         if ($this->has('barcode')) {
             $data['barcode'] = $this->input('barcode') ?: null;

@@ -37,6 +37,30 @@
                         <p class="text-slate-400">Nothing on any shelf yet.</p>
                     @endforelse
                 </dl>
+
+                @if ($product->tracks_batches && $batches->isNotEmpty())
+                    <div class="mt-4 border-t border-slate-100 pt-4 dark:border-slate-800">
+                        <p class="mb-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                            Batches — earliest expiry leaves first
+                        </p>
+                        <ul class="space-y-1.5">
+                            @foreach ($batches as $batch)
+                                <li class="flex items-center justify-between gap-2 text-xs">
+                                    <span class="truncate text-slate-600 dark:text-slate-300">
+                                        {{ $batch->batch_number ?? 'No lot' }}
+                                        <span class="text-slate-400">· {{ $batch->branch?->name }}</span>
+                                    </span>
+                                    <span class="flex shrink-0 items-center gap-2">
+                                        <span class="tabular-nums text-slate-700 dark:text-slate-300">
+                                            {{ rtrim(rtrim(number_format((float) $batch->quantity, 4), '0'), '.') }}
+                                        </span>
+                                        <span class="{{ $batch->statusBadgeClass() }}">{{ $batch->statusLabel() }}</span>
+                                    </span>
+                                </li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
             </div>
 
             {{-- ------------------------------------------- adjustment (#31) --}}
@@ -80,6 +104,39 @@
                             <input id="quantity" name="quantity" type="number" step="0.0001" required
                                    value="{{ old('quantity') }}" placeholder="-2" class="input" />
                         </div>
+
+                        {{-- Batch details, only for products that track them (#34).
+                             Adding stock names a new lot; taking it away names the
+                             batch it comes out of. --}}
+                        @if ($product->tracks_batches)
+                            <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                                <p class="mb-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                                    Batch details
+                                </p>
+
+                                <div class="space-y-2">
+                                    <input name="batch_number" type="text" maxlength="60"
+                                           value="{{ old('batch_number') }}" placeholder="Lot number (optional)"
+                                           class="input !py-2 text-sm" />
+
+                                    <input name="expiry_date" type="date" value="{{ old('expiry_date') }}"
+                                           class="input !py-2 text-sm" />
+
+                                    @if ($batches->isNotEmpty())
+                                        <select name="batch_id" class="input !py-2 text-sm">
+                                            <option value="">Or take from an existing batch…</option>
+                                            @foreach ($batches as $batch)
+                                                <option value="{{ $batch->id }}">
+                                                    {{ $batch->batch_number ?? 'No lot' }} ·
+                                                    {{ rtrim(rtrim(number_format((float) $batch->quantity, 4), '0'), '.') }} left ·
+                                                    {{ $batch->statusLabel() }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    @endif
+                                </div>
+                            </div>
+                        @endif
 
                         <div>
                             <label for="reason" class="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">Reason</label>

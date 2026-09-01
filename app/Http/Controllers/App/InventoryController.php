@@ -75,6 +75,30 @@ class InventoryController extends Controller
             'product' => $product->load(['variants', 'unit:id,short_name']),
             'movements' => $this->inventory->ledger($product->id, null, $branchId)->paginate(30)->withQueryString(),
             'byBranch' => $this->inventory->stockByBranch($product),
+            'batches' => $product->tracks_batches
+                ? $this->inventory->batches($product->id, $branchId)->get()
+                : collect(),
+            'branches' => Branch::query()->accessible()->ordered()->get(['id', 'name']),
+            'selectedBranch' => $branchId,
+            'canSeeCost' => $request->user()->can(PermissionRegistry::PRODUCTS_VIEW_COST),
+        ]);
+    }
+
+    /**
+     * Batches and expiry (#34).
+     *
+     * Expired stock comes first and stays first. It is the only list on this
+     * screen that costs money every day it is ignored.
+     */
+    public function expiry(Request $request): View
+    {
+        $branchId = $request->query('branch') !== null ? (int) $request->query('branch') : null;
+        $window = (int) config('inventory.expiry_warning_days', 30);
+
+        return view('app.inventory.expiry', [
+            'expired' => $this->inventory->expiredBatches($branchId)->paginate(25, ['*'], 'expired')->withQueryString(),
+            'expiring' => $this->inventory->expiringBatches($window, $branchId)->paginate(25, ['*'], 'expiring')->withQueryString(),
+            'window' => $window,
             'branches' => Branch::query()->accessible()->ordered()->get(['id', 'name']),
             'selectedBranch' => $branchId,
             'canSeeCost' => $request->user()->can(PermissionRegistry::PRODUCTS_VIEW_COST),
@@ -94,6 +118,11 @@ class InventoryController extends Controller
             $request->input('variant_id') !== null ? (int) $request->input('variant_id') : null,
             $request->input('branch_id') !== null ? (int) $request->input('branch_id') : null,
             $request->input('notes'),
+            [
+                'batch_number' => $request->input('batch_number'),
+                'expiry_date' => $request->input('expiry_date'),
+                'batch_id' => $request->input('batch_id'),
+            ],
         );
 
         return back()->with('success', sprintf(

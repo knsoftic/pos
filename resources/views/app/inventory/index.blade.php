@@ -86,6 +86,11 @@
                     <button type="submit" class="btn btn-secondary">
                         <x-icon name="filter" class="h-4 w-4" /> Apply
                     </button>
+                    @if (Route::has('app.inventory.expiry'))
+                        <a href="{{ route('app.inventory.expiry') }}" class="btn btn-ghost">
+                            <x-icon name="calendar" class="h-4 w-4" /> Batches &amp; expiry
+                        </a>
+                    @endif
                     @if (array_filter($filters))
                         <a href="{{ route('app.inventory.index') }}" class="btn btn-ghost">Clear</a>
                     @endif

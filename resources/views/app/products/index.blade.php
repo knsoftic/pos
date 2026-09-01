@@ -92,8 +92,15 @@
                         <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                             <td class="px-5 py-3">
                                 <div class="flex items-center gap-3">
-                                    <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-400 dark:bg-slate-800">
-                                        <x-icon name="products" class="h-4 w-4" />
+                                    {{-- Thumbnail, or the placeholder every
+                                         product without a picture shares (#149). --}}
+                                    <span class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-slate-100 text-slate-400 dark:bg-slate-800">
+                                        @if ($product->image_path)
+                                            <img src="{{ Storage::disk(config('uploads.products.disk'))->url($product->image_path) }}"
+                                                 alt="" loading="lazy" class="h-full w-full object-cover" />
+                                        @else
+                                            <x-icon name="products" class="h-4 w-4" />
+                                        @endif
                                     </span>
                                     <div class="min-w-0">
                                         <p class="truncate font-medium text-slate-900 dark:text-white">{{ $product->name }}</p>

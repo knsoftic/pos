@@ -129,6 +129,10 @@ class ProductController extends Controller
             'types' => ProductType::cases(),
             'canSeeCost' => $request->user()->can(PermissionRegistry::PRODUCTS_VIEW_COST),
             'variantsEnabled' => $this->features->enabled(FeatureRegistry::CATALOG_VARIANTS),
+            'batchesEnabled' => $this->features->anyOf([
+                FeatureRegistry::INVENTORY_EXPIRY_TRACKING,
+                FeatureRegistry::CATALOG_BATCH_TRACKING,
+            ]),
         ];
     }
 }

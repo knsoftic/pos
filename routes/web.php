@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\ImpersonationController;
 use App\Http\Controllers\Admin\PlanController;
 use App\Http\Controllers\Admin\SystemNotificationController;
+use App\Http\Controllers\App\BarcodeLabelController;
 use App\Http\Controllers\App\BillingController;
 use App\Http\Controllers\App\BranchController;
 use App\Http\Controllers\App\BrandController;
@@ -17,6 +18,7 @@ use App\Http\Controllers\App\EmployeeController;
 use App\Http\Controllers\App\InventoryController;
 use App\Http\Controllers\App\PosCounterController;
 use App\Http\Controllers\App\ProductController;
+use App\Http\Controllers\App\ProductImportController;
 use App\Http\Controllers\App\RoleController;
 use App\Http\Controllers\App\StockTransferController;
 use App\Http\Controllers\App\UnitController;
@@ -142,6 +144,14 @@ Route::middleware('tenant.app')
         Route::get('products', [ProductController::class, 'index'])
             ->middleware('permission:products.view')->name('products.index');
 
+        // Barcode labels (#27). Plan-gated on the barcode capability, and
+        // reachable by anyone who may look at the catalogue — pricing up a
+        // delivery is shop-floor work, not an admin task.
+        Route::middleware(['feature:pos.barcode_scanner', 'permission:products.view'])->group(function () {
+            Route::get('products/labels', [BarcodeLabelController::class, 'index'])->name('products.labels');
+            Route::post('products/labels', [BarcodeLabelController::class, 'sheet'])->name('products.labels.sheet');
+        });
+
         Route::middleware('permission:products.create')->group(function () {
             Route::get('products/create', [ProductController::class, 'create'])->name('products.create');
             Route::post('products', [ProductController::class, 'store'])->name('products.store');
@@ -156,12 +166,37 @@ Route::middleware('tenant.app')
         Route::delete('products/{product}', [ProductController::class, 'destroy'])
             ->middleware('permission:products.delete')->name('products.destroy');
 
+        /*
+        | Import & export (#150, #151).
+        |
+        | Two different authorities, because they are two different risks:
+        | importing WRITES the catalogue (and is a plan feature), while exporting
+        | takes data out of the building — which is why #52 marks it sensitive
+        | and it rides on `reports.export`.
+        */
+        Route::get('products-transfer', [ProductImportController::class, 'index'])
+            ->middleware('permission:products.import')->name('products.import');
+
+        Route::middleware(['feature:catalog.import', 'permission:products.import'])->group(function () {
+            Route::get('products-transfer/template', [ProductImportController::class, 'template'])->name('products.import.template');
+            Route::post('products-transfer', [ProductImportController::class, 'store'])->name('products.import.store');
+        });
+
+        Route::get('products-transfer/export', [ProductImportController::class, 'export'])
+            ->middleware('permission:reports.export')->name('products.export');
+
         // ---- inventory (#28, #30, #31, #136) --------------------------------
         // Reading stock and changing it are separate authorities: a shop floor
         // role usually needs the first and must not have the second.
         Route::middleware('permission:inventory.view')->group(function () {
             Route::get('inventory', [InventoryController::class, 'index'])->name('inventory.index');
             Route::get('inventory/{product}/ledger', [InventoryController::class, 'ledger'])->name('inventory.ledger');
+
+            // Batches & expiry (#34). Behind the expiry feature, because a plan
+            // without it has no batches to report on.
+            Route::get('inventory-expiry', [InventoryController::class, 'expiry'])
+                ->middleware('feature:inventory.expiry_tracking')
+                ->name('inventory.expiry');
         });
 
         Route::post('inventory/adjust', [InventoryController::class, 'adjust'])

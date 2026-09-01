@@ -16,7 +16,7 @@
 | **Environment** | Windows 11 + XAMPP (PHP + MySQL/MariaDB) |
 | **Start Date** | 2026-08-25 |
 | **Demo logins** | [LOGIN_CREDENTIALS.md](LOGIN_CREDENTIALS.md) — seeded accounts (dev only, #191) |
-| **Current Status** | 🔄 **Phase 4 ~90%** — Catalog + inventory engine + **stock transfers** mukammal; baqi: batch/expiry, barcode printing, image upload, import/export. Phases 0–3 mukammal. **KN Softic branding** poore system pe live. **322 tests / 1,016 assertions pass**. Build + browser verified. ➡️ **Next:** Phase 4 close, phir Phase 5 (Customers + Suppliers). |
+| **Current Status** | ✅ **Phase 4 MUKAMMAL (100%)** — Catalog + inventory engine + stock transfers + **batch/expiry (FEFO)** + **barcode labels** + **product images** + **CSV import/export**. Phases 0–4 mukammal. **KN Softic branding** poore system pe live. **361 tests / 1,129 assertions pass** (MySQL `pos_saas_test`). Build + browser verified, console zero errors. ➡️ **Next: Phase 5** (Customers + Suppliers + Ledgers). |
 
 ---
 
@@ -40,7 +40,7 @@
 | **1** | Auth + Super Admin + Tenant Architecture + DB Foundation | ✅ Ho gaya | 100% |
 | **2** | Plans + Subscriptions + Features + Limits + Businesses | ✅ Ho gaya | 100% |
 | **3** | Roles + Permissions + Branches + POS Counters + Employees | ✅ Ho gaya | 100% |
-| **4** | Products + Categories + Brands + Units + Inventory | 🔄 Chal raha hai | ~90% |
+| **4** | Products + Categories + Brands + Units + Inventory | ✅ Ho gaya | 100% |
 | **5** | Customers + Suppliers (+ Ledgers) | ⬜ Baqi | 0% |
 | **6** | Purchases + Supplier Ledger | ⬜ Baqi | 0% |
 | **7** | POS + Sales + Payments + Customer Ledger | ⬜ Baqi | 0% |
@@ -52,7 +52,7 @@
 | **13** | Animations + UI Polish + Performance | ⬜ Baqi | 0% |
 | **14** | Security + Testing | 🔄 Chal raha hai | ~25% |
 | **15** | Deployment Preparation | ⬜ Baqi | 0% |
-| | **TOTAL PROGRESS** | 🟢 | **~39%** |
+| | **TOTAL PROGRESS** | 🟢 | **~42%** |
 
 ---
 
@@ -112,6 +112,56 @@ Poore project ka audit hua, **KN Softic ki professional branding** lagi, aik pur
 **⬜ Phase 4 mein ab sirf ye baqi:** batch + expiry tracking (#34) · barcode label printing (#27) · product image upload (#149) · CSV import/export (#150/#151).
 
 ➡️ **Next:** Phase 4 close (expiry + barcode + import/export), phir **Phase 5** — Customers + Suppliers + ledgers.
+
+
+### 2026-08-29 — Phase 4 MUKAMMAL ✅ (batch/expiry + barcode labels + images + import/export)
+
+Phase 4 ke aakhri chaar items bhi ban gaye. **Products + Categories + Brands + Units + Inventory — poora phase close.**
+
+**✅ JO HO GAYA:**
+
+**1) Batch + expiry tracking (#34) — sab se bara item**
+- Nayi table `stock_batches` — aik delivery, aik shelf, apni expiry. **Alag table kyun, `stocks` pe do column kyun nahi:** aik shelf pe aik hi product teen alag deliveries se aa sakta hai jo teen alag hafton mein expire hongi. *"Kitne yoghurt hain"* aur *"Friday tak kitne acche rahenge"* do alag sawal hain — doosra jawab sirf per-batch row de sakti hai.
+- **FEFO, FIFO nahi** — stock **sab se pehle expire hone wale** batch se nikalta hai, na ke sab se pehle aane wale se. Perishables mein purani delivery hamesha pehle kharab nahi hoti (baad wali delivery ki life choti ho sakti hai), aur lambi date wala maal pehle bech dena hi wo tareeqa hai jis se baqi phenkna parta hai. Undated batch **sab se aakhir** mein — uski koi urgency nahi.
+- **Aik movement kabhi do batches mein nahi phailti.** Do deliveries se 6 yoghurt bechne pe **do ledger lines** banti hain, aik line + footnote nahi — to har line khud bata deti hai "kitne, kis batch se, kis cost pe", aur recall ledger se trace ho jata hai.
+- **Har product ko iski zaroorat nahi.** Jo dukaan doodh aur phone charger dono bechti hai usay charger ka lot number type nahi karna chahiye — is liye ye **per-product flag** hai (`products.tracks_batches`), plan ke expiry feature ke peeche. Jis product pe off ho uska behaviour bilkul waisa hi hai jaisa is table ke wujood se pehle tha.
+- **Batch minus mein nahi ja sakta**, chahe shelf ki policy negative allow karti ho: 4 ke batch se 6 nikalna ghalti hai, negative batch nahi.
+- `sellableStock()` — expired maal shelf pe hai magar **bik nahi sakta**, to ye usay chhor deta hai; `getAvailableStock()` phir bhi ginta hai. Do alag sawal, do alag jawab.
+- Naya screen **Batches & expiry**: "Already expired" hamesha upar (yehi wo list hai jo har din nazarandaz hone pe paisa khaati hai), phir "Expiring within N days". Adjustment form ab lot number + expiry bhi leta hai.
+
+**2) Barcode label printing (#27)**
+- `Support/Ean13.php` — **EAN-13 khud likha** (koi package nahi): encoding aik lookup table aur 95 bars hai, 1977 se nahi badla, aur output waise bhi inline SVG chahiye taake label printer pe crisp chhape. Package hota to jitna kaam karta us se zyada audit karna parta.
+- ⚠️ **Sab se aham cheez jo galat ho sakti thi:** EAN-13 ka **pehla digit bars mein draw hota hi nahi** — wo baqi chhe digits ki **parity (L/G mix)** mein chhupa hota hai. Isay na samajhne wala renderer aisa barcode banata hai jo **kisi doosre product ka scan hota hai**. Test isi ko pin karta hai: aik hi baqi digits, alag pehla digit → alag bars.
+- Ghalat check digit wale code pe **kuch render nahi hota** — ghalat bars chhapne se behtar hai koi bars na ho.
+- Printable sheet **app layout ke bahar** hai: print job ko sidebar, topbar aur dark mode nahi chahiye. Label width (mm) adjustable, kyunke har dukaan ke paas apna label paper hota hai.
+
+**3) Product images (#149) — secure uploads (#101)**
+- Teen cheezein har upload ko rokti hain aur **koi bhi browser pe bharosa nahi karti:** `mimes` file ke **asli content** se extension check karta hai; `image` rule usay decode kar ke dikhata hai (yani `.jpg` naam ka PHP script store hone se pehle hi reject); aur naam **random** hota hai, to koi ye tay nahi kar sakta ke file kahan giregi ya kis ki file overwrite hogi.
+- Image **replace** hoti hai, jama nahi hoti — nayi aate hi purani delete, warna saal bhar mein disk chup-chaap bhar jati hai. Product delete pe file bhi jati hai, magar **transaction commit ke baad** — rolled-back delete tasveer saath na le jaye.
+- SVG jaan boojh kar allowed **nahi**: SVG script container hai, tasveer nahi.
+
+**4) CSV import + export (#150, #151)**
+- **Import all-or-nothing hai.** Aadha import sab se bura anjaam hai: dukaan ko pata hi nahi chalta kaun si rows chadhin, to ya dobara import kar ke duplicate banate hain ya sab delete kar ke shuru se. Aik transaction, aur koi bhi kharab row poori file wapas le jati hai — **line number ke saath** report, kyunke 900 rows mein "invalid price" bekaar hai.
+- **Matching SKU se** — jis row ka SKU mojood ho wo **update** karti hai, doosra product nahi banati. Corrected price list dobara upload karna wahi karta hai jo dukaan ka matlab hai.
+- **Quota pehle check hota hai** (#79), likhne se pehle — kisi ko ye batana ke unki 500-row file row 480 pe fail hui, unki dopeher zaya karna hai.
+- Categories/brands **naam se match ya ban** jate hain; **units nahi bantay** — man-ghadat unit of measure data error hai.
+- Export **stream** hota hai (poori CSV memory mein banana demo data pe theek chalta aur asli tenant pe girta), UTF-8 BOM ke saath taake Excel accented characters na bigaare. **Cost sirf usay milti hai jo cost dekh sakta ho (#52)** — export sab se aasan tareeqa hai margins le kar bahar nikalne ka.
+
+**🐞 Aik asli bug jo is kaam ne pakra — aur wo Phase 2 se mojood tha:**
+- `FeatureService` aur `PlanLimitService` **singleton nahi the**, to har injection ko apna alag `$memo` milta tha. Dono ke paas `flush()` hai (plan ya override badalne pe). Ye do baatein sirf tab kaam karti hain jab **sab aik hi instance** share karein — warna override screen apni copy flush karti aur usi page ka layout purani (stale) copy le kar render karta, yani aik hi sawal ke do alag jawab.
+- Seeder ne isay pakra: override enable karne ke baad bhi product `tracks_batches=false` ban raha tha.
+- Fix: dono ab `scoped` hain (`singleton` nahi) — aik instance **per request/job**, to long-running worker aik tenant ke entitlements agle tenant ke job mein na le jaye.
+
+**5) ⚠️ Tests — 39 naye, sab PASS**
+- `Inventory/BatchExpiryTest` (17): opt-in, plan gate, batch banna, matching deliveries aik batch, alag expiry alag batch, **FEFO**, do batches pe do ledger lines, undated aakhir mein, batch negative nahi, expired vs expiring lists, sellable stock, HTTP screens.
+- `Catalog/CatalogToolsTest` (22): EAN-13 check digit, 95-module shape, **parity wala test**, invalid pe kuch nahi, label sheet quantities, plan gate; image random naam se store, **PHP script bhes badal ke reject**, replace pe purani delete, remove; CSV create/update-by-SKU, **aik kharab row pe poora rollback**, line number, quota, cost permission dono taraf (import + export), template.
+- **Result: `php artisan test` → 361 tests / 1129 assertions PASS**.
+
+**6) Seeder + build + browser verification**
+- Seeder mein ab **Fresh Milk 1L** hai teen batches ke saath (expired / 6d / 21d) — aur ye Professional plan pe **per-business feature override (#10)** se chalta hai, plan badal kar nahi: sirf demo data behtar dikhane ke liye Professional ka matlab badalna har tenant ke entitlements chup-chaap badal deta.
+- ✅ Browser verified: **label sheet** (3 asli EAN-13 barcodes, guard bars lambe, digits `2 | 592983 | 382221`, price), **Batches & expiry** (teenon states + values), **Import & export** (tabs, column chips, template link), aur asli export fetch → `text/csv; charset=UTF-8` + sahi header row. Zero console errors.
+
+➡️ **Next: Phase 5** — Customers + Suppliers (+ Ledgers).
 
 
 ### 2026-08-28 — Phase 4 (Session 2): Inventory engine 🔄 (~75% — stock, ledger, adjustments, low stock)
@@ -619,12 +669,12 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 - [x] Product management (full form) — #24 *(`ProductService` + filters/search/pagination wali list; SKU khali chhoro to generate)*
 - [x] Product types: Standard / Service / Variable — #25 *(`ProductType` enum — `tracksStock()` yahin, service ka stock kabhi nahi)*
 - [x] Product variations (size/color, per-variation SKU/price) — #25 *(`product_variants` + `catalog.variants` feature gate; per-variation **stock** inventory ke saath aayega)*
-- [ ] Product images + placeholder — #149 *(⚙️ `image_path` column + UI placeholder ready; upload form secure-upload rules (#101) ke saath aayega)*
+- [x] Product images + placeholder — #149 *(secure upload #101: `mimes` asli content parhta hai, `image` decode karwata hai, naam **random**; replace pe purani file delete, SVG allowed nahi)*
 - [x] Product status (Active/Inactive) — #105 *(inactive product bik nahi sakta magar poori history rakhta hai)*
 
 ### Barcode (plan-based)
 - [x] Auto-generate + manual barcode — #27 *(EAN-13 check digit ke saath, GS1 ka in-store prefix `2`; manual code diya to wahi, aur products+variants dono mein unique)*
-- [ ] Barcode label printing (custom size, name+price) — #27
+- [x] Barcode label printing (custom size, name+price) — #27 *(`Support/Ean13.php` — khud likha SVG renderer; **pehla digit parity mein hota hai, bars mein nahi**; printable sheet app layout ke bahar, label width mm mein)*
 
 ### Inventory (`InventoryService` — #185)
 - [x] Inventory listing (stock, value, status badges) — #28 *(per-shelf table + 4 summary cards; stock value sirf `products.view_cost` walon ko #52)*
@@ -633,15 +683,15 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 - [x] Stock adjustment (add/remove + reason) — #31 *(reason **required**; audit log; stock take alag se **farq** post karta hai, total nahi)*
 - [x] Stock transfer (Branch A→B, draft/sent/received) — #32 *(teen steps kyunke safar ke teen lamhe hain; in-transit stock kisi shelf pe nahi hota; **shortfall reconcile nahi hota**; cost maal ke saath jati hai; sent cancel karne pe stock wapas source pe post hota hai)*
 - [x] Low stock alerts — #33 *(threshold: variant → product → config, SQL mein resolve; inventory screen pe count + filter. Email/push notifications notification system ke saath aayenge)*
-- [ ] Expiry management (batch + expiry, reports) — #34
+- [x] Expiry management (batch + expiry, reports) — #34 *(`stock_batches` + **FEFO** consumption; aik movement kabhi do batches mein nahi phailti; per-product opt-in; expired vs expiring screens; `sellableStock()` expired ko chhorta hai)*
 - [x] Multi-branch inventory (per-branch stock) — #136 *(aik row per (branch, product, variant); branch scope se cashier ko sirf apni branch ka stock)*
 - [x] Negative stock setting (default No) — #142 *(`config/inventory.php`, env-driven; refuse hone pe `InsufficientStockException` asli numbers batati hai. Phase 11 ise per-business setting bana dega)*
 - [x] `getAvailableStock() / createMovement()` centralized — #185 *(`InventoryService` — stock badalne ka waahid raasta; `stocks.quantity` fillable hi nahi. `recalculate()` ledger se rebuild karta hai)*
 
 ### Data Migration Helpers
 - [x] Opening stock support — #152 *(`recordOpeningStock()` — movement ki tarah post hoti hai, per shelf sirf aik dafa; seeder bhi isi se demo stock deta hai)*
-- [ ] Bulk import (CSV/Excel, plan feature) — #150
-- [ ] Bulk export (Excel/CSV) — #151
+- [x] Bulk import (CSV/Excel, plan feature) — #150 *(**all-or-nothing** — aik kharab row poori file rollback karti hai, line number ke saath; SKU match pe update; quota likhne se **pehle** check)*
+- [x] Bulk export (Excel/CSV) — #151 *(streamed, UTF-8 BOM (Excel ke liye); cost sirf `products.view_cost` walon ko #52; gate `reports.export` pe)*
 - [x] Unit conversion future-ready structure — #158 *(base unit + `conversion_factor`; stock hamesha base unit mein, `toBase()`/`fromBase()` tested. Multi-unit **selling** POS ke saath)*
 
 ---
@@ -819,7 +869,7 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 
 ### Security
 - [ ] All security rules (CSRF/XSS/SQLi/mass-assignment/uploads/throttle) — #100
-- [ ] Secure file uploads (MIME/size validate, random names) — #101
+- [x] Secure file uploads (MIME/size validate, random names) — #101 *(product images: `config/uploads.php` + content-based MIME check + decode check + random names + dimension cap; SVG allowed nahi)*
 - [ ] Error handling (friendly messages, no technical leak in prod) — #93
 - [ ] Logging (critical exceptions + failed financial txns) — #94
 - [ ] Financial record integrity (edit/void/return, not delete) — #133, #198
@@ -834,7 +884,7 @@ Har phase ke andar tamam tasks checkbox ke saath hain. Jo ho jaye uska `[ ]` ko 
 - [x] Feature tests: Subscription Expiry — #116 *(`Subscription/SubscriptionExpiryTest` 26 + `Subscription/SubscriptionGateTest` 22 — trial/grace/expiry, lock vs read-only vs pos-off, stale status column dono taraf se)*
 - [x] ⚠️ Tenant leak test (Business A → Business B URL = 403/404) — #117 *(cross-tenant PK `find()` → null; dashboard HTTP test dono tenants pe; request input se tenant switch block)*
 
-> **Ab tak ka test status:** `php artisan test` → **322 tests / 1,016 assertions PASS** (MySQL `pos_saas_test`) — Auth 22 · PasswordReset 11 · TenantIsolation 20 · PlanLimit 29 · PlanFeature 21 · SubscriptionExpiry 26 · SubscriptionGate 22 · RolePermission 31 · BranchAccess 19 · Employee 20 · Catalog 23 · Product 24 · Inventory 31 · StockTransfer 22 · Unit 1. Har naye phase ke saath yahan tests barhte rahenge.
+> **Ab tak ka test status:** `php artisan test` → **361 tests / 1,129 assertions PASS** (MySQL `pos_saas_test`) — Auth 22 · PasswordReset 11 · TenantIsolation 20 · PlanLimit 29 · PlanFeature 21 · SubscriptionExpiry 26 · SubscriptionGate 22 · RolePermission 31 · BranchAccess 19 · Employee 20 · Catalog 23 · Product 24 · Inventory 31 · StockTransfer 22 · BatchExpiry 17 · CatalogTools 22 · Unit 1. Har naye phase ke saath yahan tests barhte rahenge.
 
 ---
 
