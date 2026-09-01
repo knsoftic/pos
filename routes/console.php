@@ -95,3 +95,19 @@ Schedule::command('pos:prune')
 Schedule::call(fn () => Cache::put('pos.scheduler.heartbeat', now(), now()->addDay()))
     ->everyFiveMinutes()
     ->name('scheduler-heartbeat');
+
+/*
+| The nightly backup (#95).
+|
+| Just after midnight and BEFORE the integrity sweep at 02:00, deliberately: if
+| the sweep finds drift, the most recent archive is from before whatever the
+| repair does to it. A backup taken after the repair has already lost the state
+| somebody would want to look at.
+|
+| Sequential, not runInBackground: a dump and the integrity check competing for
+| the same database is how a nightly job becomes a nightly outage.
+*/
+Schedule::command('pos:backup')
+    ->dailyAt('01:00')
+    ->withoutOverlapping()
+    ->onOneServer();

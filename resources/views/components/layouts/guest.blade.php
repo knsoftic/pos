@@ -36,6 +36,10 @@
 </head>
 <body class="min-h-full bg-slate-50 font-sans text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-200">
 
+
+    {{-- Before anything else: a browser that cannot render the app has to be told so (#180). --}}
+    <x-browser-notice />
+
     {{-- Ambient background --}}
     <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         <div class="absolute -left-40 -top-40 h-96 w-96 rounded-full bg-brand-500/10 blur-3xl"></div>

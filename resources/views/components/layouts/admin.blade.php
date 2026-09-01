@@ -57,6 +57,10 @@
 <body class="h-full bg-slate-100 font-sans text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-200"
       x-data="{ sidebarOpen: false }">
 
+
+    {{-- Before anything else: a browser that cannot render the app has to be told so (#180). --}}
+    <x-browser-notice />
+
     <div x-show="sidebarOpen" x-transition.opacity @click="sidebarOpen = false"
          class="fixed inset-0 z-30 bg-slate-900/50 backdrop-blur-sm lg:hidden" style="display:none"></div>
 

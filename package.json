@@ -16,5 +16,11 @@
     },
     "dependencies": {
         "apexcharts": "^7.0.0"
-    }
+    },
+    "browserslist": [
+        "Chrome >= 111",
+        "Edge >= 111",
+        "Firefox >= 128",
+        "Safari >= 16.4"
+    ]
 }

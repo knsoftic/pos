@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -74,6 +75,7 @@ class Preflight extends Command
         $this->checkCaches();
         $this->checkStorageLink();
         $this->checkScheduler();
+        $this->checkBackups();
 
         return $this->report();
     }
@@ -346,7 +348,9 @@ class Preflight extends Command
             return;
         }
 
-        $minutes = now()->diffInMinutes($last, absolute: true);
+        // (int): Carbon 3 returns a float here, and "cron last ran
+        // 7.0166666666667 minutes ago" is a sentence nobody wants at 3am.
+        $minutes = (int) now()->diffInMinutes($last, absolute: true);
 
         $this->record(
             $minutes <= 15 ? self::PASS : self::WARN,
@@ -354,6 +358,43 @@ class Preflight extends Command
             $minutes <= 15
                 ? "Last ran {$minutes} minute(s) ago."
                 : "Last heartbeat was {$minutes} minutes ago — cron looks stopped. Holds, integrity checks and pruning are not running.",
+        );
+    }
+
+    protected function checkBackups(): void
+    {
+        $diskName = (string) config('backup.destination.disk');
+        $local = config("filesystems.disks.{$diskName}.driver") === 'local';
+
+        try {
+            $archives = collect(Storage::disk($diskName)->files(config('backup.destination.path')))
+                ->filter(fn (string $file) => str_contains(basename($file), 'pos-backup-'));
+        } catch (Throwable $e) {
+            $this->record(self::WARN, 'Backups', 'Destination unreadable: '.$e->getMessage());
+
+            return;
+        }
+
+        if ($archives->isEmpty()) {
+            $this->record(self::WARN, 'Backups', 'None taken yet. Run `php artisan pos:backup` once by hand and restore it before you rely on it.');
+
+            return;
+        }
+
+        $newest = $archives->max(fn (string $file) => Storage::disk($diskName)->lastModified($file));
+        $hours = (int) now()->diffInHours(now()->setTimestamp($newest), absolute: true);
+        $stale = $hours > (int) config('backup.stale_after_hours');
+
+        $this->record(
+            $stale ? self::WARN : ($local ? self::WARN : self::PASS),
+            'Backups',
+            match (true) {
+                $stale => "Newest archive is {$hours} hours old. The nightly job is not running.",
+                // Never a clean pass while the only copy shares a disk with the
+                // database: it survives a mistake and nothing else.
+                $local => "{$archives->count()} on the \"{$diskName}\" disk, newest {$hours}h old — but that is the same machine as the database. Set BACKUP_DISK off-box.",
+                default => "{$archives->count()} on \"{$diskName}\", newest {$hours}h old.",
+            },
         );
     }
 

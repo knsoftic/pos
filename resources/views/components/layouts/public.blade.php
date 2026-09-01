@@ -65,6 +65,10 @@
 
 <body class="min-h-full bg-white font-sans text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-200">
 
+
+    {{-- Before anything else: a browser that cannot render the app has to be told so (#180). --}}
+    <x-browser-notice />
+
     {{-- ─────────────────────────────── header ─────────────────────────────── --}}
     <header x-data="{ open: false }" class="sticky top-0 z-40 border-b border-slate-200/80 bg-white/85 backdrop-blur dark:border-slate-800 dark:bg-slate-950/85">
         <div class="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3.5 sm:px-6">

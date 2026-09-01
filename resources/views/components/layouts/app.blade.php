@@ -160,6 +160,10 @@
 <body class="h-full bg-slate-50 font-sans text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-200"
       x-data="{ sidebarOpen: false }">
 
+
+    {{-- Before anything else: a browser that cannot render the app has to be told so (#180). --}}
+    <x-browser-notice />
+
     {{-- ============ IMPERSONATION BANNER ============ --}}
     {{-- Deliberately loud and always at the very top: an operator who forgets
          they are inside a customer's account can do real damage. #178 --}}
