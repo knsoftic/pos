@@ -34,7 +34,24 @@ return new class extends Migration
             $table->foreignId('business_id')->constrained()->cascadeOnDelete();
             $table->foreignId('branch_id')->constrained()->cascadeOnDelete();
             $table->foreignId('product_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('product_variant_id')->nullable()->constrained()->cascadeOnDelete();
+            /*
+             | ⚠️ restrictOnDelete, NOT cascade — and MySQL is the one insisting.
+             |
+             | `product_variant_id` is the base column of the generated
+             | `variant_key` below, and MySQL forbids CASCADE / SET NULL /
+             | SET DEFAULT on the base column of a generated column. MariaDB
+             | allows it, which is why this passed every test on the dev box and
+             | then failed on the first real MySQL 8 server with a bare
+             | "General error: 1215 Cannot add foreign key constraint".
+             |
+             | Nothing is lost by it. `ProductVariant` uses SoftDeletes, so the
+             | application never removes a variant row and this cascade has never
+             | once fired; restricting also matches the rule the rest of the
+             | schema follows — anything referenced is archived, not deleted
+             | (#104, #198). `stock_transfer_items`, the other table with this
+             | generated column, already does exactly this.
+             */
+            $table->foreignId('product_variant_id')->nullable()->constrained()->restrictOnDelete();
 
             // Quantities are decimal, never integer: 1.25 kg is a real quantity.
             // Four places is enough for grams-in-kilograms without inviting
