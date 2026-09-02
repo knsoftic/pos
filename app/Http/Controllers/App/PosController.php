@@ -82,7 +82,27 @@ class PosController extends Controller
             'creditMethod' => (string) config('pos.credit_method', 'credit'),
             'cashMethods' => (array) config('pos.cash_methods', ['cash']),
             'rounding' => (float) config('pos.cash_rounding', 0),
-            'currency' => (string) config('subscription.currency_symbol', ''),
+            /*
+             | ⚠️ `format.*`, NOT `subscription.*`. This read
+             | `subscription.currency_symbol` — what KN Softic charges the SHOP
+             | — so every till printed the platform's billing currency instead
+             | of the one the shop sells in. A Lahore shop taking rupees saw
+             | dollars on every line.
+             |
+             | The cart lives in the browser, so the till formats money in
+             | JavaScript and cannot call Format::money(). The whole format goes
+             | over instead of just the symbol: position, decimals and both
+             | separators are shop settings too, and a till that honoured only
+             | the symbol would still be wrong for anyone who does not write
+             | 1,234.56.
+             */
+            'money' => [
+                'symbol' => (string) config('format.currency_symbol', ''),
+                'position' => (string) config('format.currency_position', 'before'),
+                'decimals' => (int) config('format.decimals', 2),
+                'thousands' => (string) config('format.thousands_separator', ','),
+                'decimal' => (string) config('format.decimal_separator', '.'),
+            ],
 
             'holds' => Sale::query()->held()->with('customer:id,name')->latest('id')->get([
                 'id', 'invoice_no', 'customer_id', 'total', 'created_at',

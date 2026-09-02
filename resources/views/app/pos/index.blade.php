@@ -23,7 +23,7 @@
             creditMethod: @js($creditMethod),
             cashMethods: @js($cashMethods),
             rounding: {{ $rounding }},
-            currency: @js($currency),
+            moneyFormat: @js($money),
             canDiscount: {{ $canDiscount ? 'true' : 'false' }},
             discountCap: {{ $discountCap === null ? 'null' : $discountCap }},
             urls: {
@@ -172,7 +172,7 @@
                             Till open since {{ $session->opened_at->format('H:i') }}
                         </span>
                         <span class="tabular-nums text-slate-600 dark:text-slate-300">
-                            {{ $currency }}{{ number_format($session->expectedCash(), 2) }} in the drawer
+                            {{ money($session->expectedCash(), true) }} in the drawer
                         </span>
                     </div>
                 @endif
@@ -819,10 +819,23 @@
                 },
                 csrf() { return document.querySelector('meta[name="csrf-token"]')?.content || ''; },
                 round(v, dp) { const f = Math.pow(10, dp); return Math.round((v + Number.EPSILON) * f) / f; },
+                /*
+                 | Mirrors App\Support\Format::money() exactly. Deliberately
+                 | NOT toLocaleString: that formats to the BROWSER's locale, so
+                 | the same shop's till read differently on a phone set to one
+                 | language and the counter PC set to another. The shop's own
+                 | separators are settings; the browser does not get a vote.
+                 */
                 money(v) {
-                    return this.currency + (v || 0).toLocaleString(undefined, {
-                        minimumFractionDigits: 2, maximumFractionDigits: 2,
-                    });
+                    const f = this.moneyFormat;
+                    const fixed = (Number(v) || 0).toFixed(f.decimals);
+                    const [whole, fraction] = fixed.split('.');
+                    const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, f.thousands);
+                    const number = fraction ? grouped + f.decimal + fraction : grouped;
+
+                    return f.position === 'after'
+                        ? (number + ' ' + f.symbol).trim()
+                        : (f.symbol + ' ' + number).trim();
                 },
                 headline(s) { return String(s).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()); },
                 priceLabel(p) {

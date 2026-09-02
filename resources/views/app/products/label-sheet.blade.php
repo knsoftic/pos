@@ -121,7 +121,10 @@
                 @endif
 
                 @if ($showPrice)
-                    <p class="price">{{ config('subscription.currency_symbol') }}{{ number_format((float) $product->selling_price, 2) }}</p>
+                    {{-- The shop's OWN money: this label goes on the shop's own
+                         shelf. It used to print `subscription.currency_symbol`,
+                         which is what we bill the shop in. --}}
+                    <p class="price">{{ money($product->selling_price, true) }}</p>
                 @endif
             </div>
         @endforeach
