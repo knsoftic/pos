@@ -120,6 +120,36 @@ class PlatformSettingRegistry
                 'rules' => ['required', 'integer', 'min:0', 'max:90'],
             ],
 
+            // =============================================== billing (#115)
+            //
+            // ⚠️ THIS IS NOT THE SHOP'S CURRENCY. This is what KN Softic
+            // charges a shop in — the figure on the pricing page and on a
+            // subscription invoice. What a shop sells its own goods in is
+            // `format.currency_*` in SettingRegistry, which each tenant sets
+            // for itself. A shop in Lahore can bill its customers in PKR while
+            // paying us in USD, and both are right at the same time.
+            'subscription.currency' => [
+                'group' => 'billing',
+                'label' => 'Billing currency',
+                'help' => 'The ISO code you charge shops in — USD, PKR, AED. Changing it does NOT convert existing prices; it relabels them, so set it before you have paying customers.',
+                'type' => 'string',
+                'rules' => ['required', 'string', 'size:3', 'alpha'],
+            ],
+            'subscription.currency_symbol' => [
+                'group' => 'billing',
+                'label' => 'Billing currency symbol',
+                'help' => 'What the pricing page prints in front of the number. "Rs", "$", "د.إ".',
+                'type' => 'string',
+                'rules' => ['required', 'string', 'max:8'],
+            ],
+            'subscription.currency_decimals' => [
+                'group' => 'billing',
+                'label' => 'Decimal places',
+                'help' => 'Two for most currencies. Zero where the smallest unit in circulation is the whole one.',
+                'type' => 'int',
+                'rules' => ['required', 'integer', 'min:0', 'max:4'],
+            ],
+
             // ============================================ maintenance (#160)
             'platform.maintenance' => [
                 'group' => 'maintenance',
@@ -150,6 +180,7 @@ class PlatformSettingRegistry
         return [
             'branding' => 'Branding',
             'signup' => 'Sign-up & trials',
+            'billing' => 'Billing',
             'maintenance' => 'Maintenance',
         ];
     }
@@ -160,6 +191,7 @@ class PlatformSettingRegistry
         return [
             'branding' => 'Whose product this is. Changing it here changes it everywhere — no deployment, no search and replace.',
             'signup' => 'Whether strangers may create an account, and what they get when they do.',
+            'billing' => 'What YOU charge shops in — not what a shop charges its own customers, which each one sets in its own Settings.',
             'maintenance' => 'Taking the shops offline without locking yourself out.',
         ];
     }
