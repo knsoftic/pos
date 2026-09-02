@@ -135,7 +135,7 @@ class GlobalSearchService
     protected function suppliers($user, string $term): Collection
     {
         if (! $user->can(PermissionRegistry::SUPPLIERS_VIEW)
-            || ! $this->features->enabled(FeatureRegistry::PURCHASES_SUPPLIER_LEDGER)) {
+            || ! $this->features->enabled(FeatureRegistry::PURCHASES_ORDERS)) {
             return collect();
         }
 

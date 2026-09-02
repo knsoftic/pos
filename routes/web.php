@@ -466,8 +466,22 @@ Route::middleware('tenant.app')
             });
         });
 
-        // ---- suppliers (#38, #42) -------------------------------------------
-        Route::middleware('feature:purchases.supplier_ledger')->group(function () {
+        /*
+        | ---- suppliers (#38, #42) -------------------------------------------
+        |
+        | ⚠️ The LIST rides on `purchases.orders`, not on the ledger feature.
+        |
+        | It used to sit behind `purchases.supplier_ledger`, and that made a
+        | plan you could actually buy into an impossible one: `purchases.orders`
+        | is enabled by default and a purchase order REQUIRES a supplier_id, so
+        | a shop could raise orders and had no way to create — or even see — a
+        | single supplier. The Suppliers menu simply was not there.
+        |
+        | Customers were always shaped correctly and are the model here: the
+        | list is gated on the module, and only the LEDGER actions carry the
+        | extra ledger feature. Suppliers now match.
+        */
+        Route::middleware('feature:purchases.orders')->group(function () {
             Route::get('suppliers', [SupplierController::class, 'index'])
                 ->middleware('permission:suppliers.view')->name('suppliers.index');
 
@@ -483,7 +497,9 @@ Route::middleware('tenant.app')
             Route::get('suppliers/{supplier}', [SupplierController::class, 'show'])
                 ->middleware('permission:suppliers.view')->name('suppliers.show');
 
-            Route::middleware('permission:suppliers.ledger')->group(function () {
+            // Money on a supplier account is its own feature AND its own
+            // authority — same shape as the customer ledger above.
+            Route::middleware(['feature:purchases.supplier_ledger', 'permission:suppliers.ledger'])->group(function () {
                 Route::post('suppliers/{supplier}/payments', [SupplierController::class, 'payment'])->name('suppliers.payments');
                 Route::post('suppliers/{supplier}/adjustments', [SupplierController::class, 'adjustment'])->name('suppliers.adjustments');
             });
@@ -707,4 +723,3 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('notifications/reconcile', [SystemNotificationController::class, 'reconcile'])->name('notifications.reconcile');
     });
 });
-

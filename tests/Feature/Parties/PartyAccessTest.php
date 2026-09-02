@@ -359,11 +359,55 @@ class PartyAccessTest extends TestCase
         $this->assertSame(1000.0, $supplier->fresh()->theyOweUs(), 'Paying with nothing owed leaves an advance.');
     }
 
-    public function test_suppliers_need_the_plan_feature(): void
+    public function test_suppliers_need_the_purchasing_module_not_the_ledger(): void
     {
-        $this->setUpBusiness([FeatureRegistry::PURCHASES_SUPPLIER_LEDGER => false]);
+        // Without purchasing at all there is nobody to buy from.
+        $this->setUpBusiness([FeatureRegistry::PURCHASES_ORDERS => false]);
 
         $this->actingAs($this->owner)->getJson(route('app.suppliers.index'))->assertStatus(403);
+    }
+
+    public function test_a_plan_that_can_order_can_always_reach_its_suppliers(): void
+    {
+        /*
+         | ⚠️ THE BUG THIS PINS. Suppliers used to sit behind
+         | `purchases.supplier_ledger`, which is off by default, while
+         | `purchases.orders` is ON by default — and a purchase order REQUIRES a
+         | supplier_id. So the shipped default plan could raise purchase orders
+         | and had no way to create, or even see, a single supplier. The
+         | Suppliers menu was simply absent, which is exactly how it was
+         | reported: "Suppliers sidebar mein show nahi ho raha".
+         |
+         | Ordering and knowing who you order from are the same capability.
+         */
+        $this->setUpBusiness([
+            FeatureRegistry::PURCHASES_ORDERS => true,
+            FeatureRegistry::PURCHASES_SUPPLIER_LEDGER => false,
+        ]);
+
+        $this->actingAs($this->owner)->get(route('app.suppliers.index'))->assertOk();
+
+        $this->actingAs($this->owner)
+            ->post(route('app.suppliers.store'), ['name' => 'Reachable Supplier'])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('suppliers', ['name' => 'Reachable Supplier']);
+    }
+
+    public function test_the_ledger_itself_still_needs_its_own_feature(): void
+    {
+        // The list is the module; MONEY on a supplier account is the paid part.
+        // Losing that distinction is what caused the bug above.
+        $this->setUpBusiness([
+            FeatureRegistry::PURCHASES_ORDERS => true,
+            FeatureRegistry::PURCHASES_SUPPLIER_LEDGER => false,
+        ]);
+
+        $supplier = $this->supplier();
+
+        $this->actingAs($this->owner)
+            ->postJson(route('app.suppliers.payments', $supplier), ['amount' => 100])
+            ->assertStatus(403);
     }
 
     // ------------------------------------------------------- validation

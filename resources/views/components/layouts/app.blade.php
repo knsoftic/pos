@@ -55,7 +55,7 @@
         ['label' => 'Inventory',    'icon' => 'inventory',   'route' => 'app.inventory.index', 'feature' => FeatureRegistry::INVENTORY_STOCK_TRACKING, 'permission' => PermissionRegistry::INVENTORY_VIEW],
         ['label' => 'Transfers',    'icon' => 'refresh',     'route' => 'app.transfers.index', 'feature' => FeatureRegistry::INVENTORY_TRANSFERS, 'permission' => PermissionRegistry::INVENTORY_TRANSFER],
         ['label' => 'Customers',    'icon' => 'customers',   'route' => 'app.customers.index', 'feature' => FeatureRegistry::CUSTOMERS_MANAGEMENT, 'permission' => PermissionRegistry::CUSTOMERS_VIEW],
-        ['label' => 'Suppliers',    'icon' => 'suppliers',   'route' => 'app.suppliers.index', 'feature' => FeatureRegistry::PURCHASES_SUPPLIER_LEDGER, 'permission' => PermissionRegistry::SUPPLIERS_VIEW],
+        ['label' => 'Suppliers',    'icon' => 'suppliers',   'route' => 'app.suppliers.index', 'feature' => FeatureRegistry::PURCHASES_ORDERS, 'permission' => PermissionRegistry::SUPPLIERS_VIEW],
         ['label' => 'Expenses',     'icon' => 'expenses',    'route' => 'app.expenses.index', 'feature' => FeatureRegistry::ACCOUNTING_EXPENSES, 'permission' => PermissionRegistry::EXPENSES_VIEW],
         ['label' => 'Other income', 'icon' => 'trending-up', 'route' => 'app.income.index', 'feature' => FeatureRegistry::ACCOUNTING_EXPENSES, 'permission' => PermissionRegistry::EXPENSES_VIEW],
         ['label' => 'Profit & Loss','icon' => 'reports',     'route' => 'app.reports.profit-loss', 'feature' => FeatureRegistry::ACCOUNTING_PROFIT_LOSS, 'permission' => PermissionRegistry::REPORTS_VIEW_PROFIT],

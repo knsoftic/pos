@@ -368,14 +368,14 @@ final class PermissionRegistry
                 'group' => 'purchasing',
                 'description' => 'See supplier records and contact details.',
                 'sensitive' => false,
-                'feature' => FeatureRegistry::PURCHASES_SUPPLIER_LEDGER,
+                'feature' => FeatureRegistry::PURCHASES_ORDERS,
             ],
             self::SUPPLIERS_MANAGE => [
                 'name' => 'Manage suppliers',
                 'group' => 'purchasing',
                 'description' => 'Add and edit suppliers.',
                 'sensitive' => false,
-                'feature' => FeatureRegistry::PURCHASES_SUPPLIER_LEDGER,
+                'feature' => FeatureRegistry::PURCHASES_ORDERS,
             ],
             self::SUPPLIERS_LEDGER => [
                 'name' => 'Supplier ledger & payments',
