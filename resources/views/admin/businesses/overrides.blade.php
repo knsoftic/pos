@@ -260,7 +260,10 @@
 
                                             <label class="flex items-center gap-1.5 pb-2 text-xs text-slate-600 dark:text-slate-400">
                                                 <input type="hidden" name="unlimited" value="0">
+                                                {{-- @checked, not just x-model: without it a page with no
+                                                     Alpine saves "not unlimited" over an unlimited override. --}}
                                                 <input type="checkbox" name="unlimited" value="1" x-model="unlimited"
+                                                       @checked($override !== null && $override->value === null)
                                                        class="h-3.5 w-3.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
                                                 Unlimited
                                             </label>

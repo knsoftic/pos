@@ -130,7 +130,12 @@
                     <div class="flex flex-wrap items-center gap-3">
                         <label class="flex w-40 shrink-0 items-center gap-2.5">
                             <input type="hidden" name="prices[{{ $key }}][enabled]" value="0">
+                            {{-- @checked is NOT redundant beside x-model: without it this
+                                 checkbox's state lives only in JavaScript, so a page where Alpine
+                                 fails to load renders it OFF and the hidden 0 above silently saves
+                                 OFF. That wiped every billing cycle on the live site. --}}
                             <input type="checkbox" name="prices[{{ $key }}][enabled]" value="1" x-model="on"
+                                   @checked($enabled)
                                    class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
                             <span class="text-sm font-medium text-slate-800 dark:text-slate-200">{{ $cycle->label() }}</span>
                         </label>
@@ -259,10 +264,13 @@
                                         @endif
                                     </span>
 
+                                    {{-- Same reason as the price checkbox: with no @selected the
+                                         browser shows the FIRST option, so a plan with a custom quota
+                                         reads as "Inherit" and saving keeps that lie. --}}
                                     <select name="limits[{{ $limit->id }}][mode]" x-model="mode" class="input !w-auto !py-1.5 text-xs">
-                                        <option value="inherit">Inherit</option>
-                                        <option value="unlimited">Unlimited</option>
-                                        <option value="custom">Custom</option>
+                                        <option value="inherit" @selected($mode === 'inherit')>Inherit</option>
+                                        <option value="unlimited" @selected($mode === 'unlimited')>Unlimited</option>
+                                        <option value="custom" @selected($mode === 'custom')>Custom</option>
                                     </select>
 
                                     <input type="number" min="0" name="limits[{{ $limit->id }}][value]"

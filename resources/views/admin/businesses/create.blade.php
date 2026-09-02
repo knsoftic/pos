@@ -159,7 +159,9 @@
                     <div class="sm:col-span-2 rounded-xl border border-slate-200 p-3 dark:border-slate-800">
                         <label class="flex items-start gap-2.5">
                             <input type="hidden" name="start_trial" value="0">
+                            {{-- @checked, not just x-model — see the plans form. --}}
                             <input type="checkbox" name="start_trial" value="1" x-model="trial"
+                                   @checked(old('start_trial'))
                                    class="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500">
                             <span class="text-sm">
                                 <span class="font-medium text-slate-800 dark:text-slate-200">Start as a free trial</span>
