@@ -370,8 +370,31 @@ ulta karein to `www` us mein likh nahi sakta aur site phir 500 dene lagti hai.
 ```bash
 cd /www/wwwroot/pos.knbazaar.com
 $PHP artisan storage:link
+$PHP artisan vendor:publish --force --tag=livewire:assets
 $PHP artisan optimize
 ```
+
+### `vendor:publish --tag=livewire:assets` kyun zaroori hai
+
+Default par Livewire apni JavaScript aik **route** se deti hai, aur us route ka
+rasta `app.debug` par mabni hai — `livewire.js` jab true, `livewire.min.js` jab
+false. Cached routes ke saath ye rasta aur wo rasta jo page maangta hai alag ho
+sakte hain, aur natija 404 hota hai. Us 404 ki alamat bohat door nikalti hai:
+
+- Livewire load nahi hoti
+- **Alpine bhi nahi** — is project mein Alpine Livewire ke andar aata hai
+- har `x-model` bekaar, har `x-show` / `x-cloak` hamesha chhupa
+- pricing page par qeematein ghayab, aur **admin ka Plans form "submit hi nahi
+  hota"** — kyunke uske price toggles aur limit fields poori tarah Alpine par
+  chalte hain
+
+Publish karne ke baad Livewire `public/vendor/livewire/livewire.min.js` istemal
+karti hai — aik **asli static file**, jo nginx seedha serve karta hai. Koi route,
+koi route cache, koi debug flag beech mein nahi. Tez bhi hai.
+
+⚠️ Ye har baar dobara chalayein jab `composer install` Livewire ko update kare,
+warna publish ki hui files package se purani reh jayengi — browser console mein
+Livewire khud *"assets are out of date"* ki warning deti hai.
 
 ```bash
 chown -R www:www .
@@ -559,8 +582,9 @@ cd /www/wwwroot/pos.knbazaar.com
 git pull
 composer install --no-dev --optimize-autoloader
 $PHP artisan migrate --force
+$PHP artisan vendor:publish --force --tag=livewire:assets
 $PHP artisan optimize
-chown -R www:www storage bootstrap/cache
+chown -R www:www storage bootstrap/cache public/vendor
 ```
 
 ```bash
@@ -583,6 +607,7 @@ Server par `npm` ki zaroorat nahi — assets `git pull` ke saath aate hain (step
 | 500 page par chhota sa code | Wo code `storage/logs/security.log` mein asli stack trace ke saath mojood hai. Usay grep karein. |
 | Images aur receipts 404 | `storage:link` chala hi nahi — `symlink` abhi band hai (step 3). |
 | Backup fail hota hai | `proc_open` band hai (step 3), ya `BACKUP_MYSQLDUMP` ghalat binary par hai. |
+| Plans ka form submit hi nahi hota, toggles kaam nahi karte | Wahi masla — Alpine load nahi hui. `vendor:publish --force --tag=livewire:assets`, phir `optimize`. |
 | Page khulta hai magar kuch bhi interactive nahi — qeematein, dropdown, theme picker ghayab | Browser console mein `livewire...js` par 404 dekhein. Cache `.env` se purana hai: `optimize:clear && optimize`. |
 | Password reset kuch nahi karta | `MAIL_MAILER` abhi `log` hai. Preflight is par warning deti hai. |
 | Held sales jama ho rahe hain, statuses purane | Cron nahi chal raha. `pos:preflight` paanch minute ke andar bata deti hai. |
