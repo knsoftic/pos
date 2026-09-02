@@ -9,6 +9,7 @@ use App\Models\Business;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Services\SubscriptionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -327,7 +328,7 @@ class SubscriptionGateTest extends TestCase
     {
         $this->subscribe(['ends_at' => now()->addDays(20), 'cancelled_at' => now()]);
 
-        app(\App\Services\SubscriptionService::class)->resume($this->business);
+        app(SubscriptionService::class)->resume($this->business);
 
         $this->actingAs($this->user, 'web')->get(route('app.dashboard'))->assertOk();
     }

@@ -2,13 +2,17 @@
 
 namespace Tests\Feature\Subscription;
 
+use App\Enums\BillingCycle;
 use App\Exceptions\FeatureUnavailableException;
+use App\Http\Middleware\CheckFeature;
 use App\Models\Business;
 use App\Models\BusinessFeatureOverride;
 use App\Models\Feature;
 use App\Models\Plan;
 use App\Models\Subscription;
+use App\Models\User;
 use App\Services\FeatureService;
+use App\Services\SubscriptionService;
 use App\Support\FeatureRegistry;
 use Database\Seeders\FeatureSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -289,8 +293,8 @@ class PlanFeatureTest extends TestCase
         $feature = Feature::query()->where('code', FeatureRegistry::BRANCHES_MULTI_BRANCH)->firstOrFail();
         $cheaper->features()->attach($feature->id, ['is_enabled' => false]);
 
-        app(\App\Services\SubscriptionService::class)
-            ->changePlan($this->business, $cheaper, \App\Enums\BillingCycle::Monthly);
+        app(SubscriptionService::class)
+            ->changePlan($this->business, $cheaper, BillingCycle::Monthly);
 
         $this->assertFalse(
             $this->features()->enabled(FeatureRegistry::BRANCHES_MULTI_BRANCH, $this->business),
@@ -367,7 +371,7 @@ class PlanFeatureTest extends TestCase
 
         $this->subscribeTo([FeatureRegistry::BRANCHES_MULTI_BRANCH => false]);
 
-        $user = \App\Models\User::factory()->for($this->business)->create();
+        $user = User::factory()->for($this->business)->create();
 
         $this->actingAs($user, 'web')
             ->get('/__test/branches')
@@ -383,7 +387,7 @@ class PlanFeatureTest extends TestCase
 
         $this->subscribeTo([FeatureRegistry::BRANCHES_MULTI_BRANCH => false]);
 
-        $user = \App\Models\User::factory()->for($this->business)->create();
+        $user = User::factory()->for($this->business)->create();
 
         $this->actingAs($user, 'web')
             ->getJson('/__test/branches-json')
@@ -400,7 +404,7 @@ class PlanFeatureTest extends TestCase
 
         $this->subscribeTo([FeatureRegistry::POS_TERMINAL => true]);
 
-        $user = \App\Models\User::factory()->for($this->business)->create();
+        $user = User::factory()->for($this->business)->create();
 
         $this->actingAs($user, 'web')
             ->get('/__test/pos')
@@ -420,7 +424,7 @@ class PlanFeatureTest extends TestCase
             FeatureRegistry::BRANCHES_MULTI_BRANCH => false,
         ]);
 
-        $user = \App\Models\User::factory()->for($this->business)->create();
+        $user = User::factory()->for($this->business)->create();
 
         // Entitled to POS, not to branches — the AND must fail on the second code.
         $this->actingAs($user, 'web')
@@ -434,7 +438,7 @@ class PlanFeatureTest extends TestCase
         // A typo must not silently open a door. The middleware throws instead.
         $this->expectException(\InvalidArgumentException::class);
 
-        app(\App\Http\Middleware\CheckFeature::class)->handle(
+        app(CheckFeature::class)->handle(
             request(),
             fn ($request) => response('reached'),
             'pos.does_not_exist',
