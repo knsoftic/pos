@@ -77,9 +77,26 @@ class BarcodeLabelController extends Controller
          | somewhere useful under its own steam.
          */
         if ($wanted->isEmpty()) {
+            /*
+             | ⚠️ TWO DIFFERENT SITUATIONS LOOK IDENTICAL FROM HERE, and telling
+             | them apart is the whole point of this branch.
+             |
+             |   Rows on screen, none filled in  -> "type a number beside one"
+             |   No rows at all                  -> that advice is nonsense.
+             |                                      There is nothing to type
+             |                                      beside. The shop needs a
+             |                                      BARCODE on a product first.
+             |
+             | Giving the first message in the second situation sends somebody
+             | hunting the screen for a box that is not there.
+             */
+            $haveAny = Product::query()->whereNotNull('barcode')->active()->exists();
+
             return redirect()
                 ->route('app.products.labels')
-                ->with('error', 'Type how many labels you need beside a product, then open the sheet.');
+                ->with('error', $haveAny
+                    ? 'Type how many labels you need beside a product, then open the sheet.'
+                    : 'No product has a barcode yet, so there is nothing to print. Open a product, tick "Generate barcode", save — then come back here.');
         }
 
         $products = Product::query()

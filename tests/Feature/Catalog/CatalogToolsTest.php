@@ -205,6 +205,62 @@ class CatalogToolsTest extends TestCase
         $this->assertStringNotContainsString('Something is broken', (string) $response->getContent());
     }
 
+    public function test_a_shop_with_no_barcodes_is_told_that_and_not_blamed(): void
+    {
+        /*
+         | ⚠️ THE MESSAGE MUST FIT THE SITUATION. With no barcoded product the
+         | table is empty -- there is no box to type a number into -- so
+         | "type how many labels you need beside a product" sends somebody
+         | hunting the screen for a field that does not exist. They conclude the
+         | page is broken, and from where they are sitting that is reasonable.
+         */
+        $this->setUpBusiness();
+
+        app(ProductService::class)->create([
+            'name' => 'No Barcode Here', 'type' => ProductType::Standard->value,
+            'selling_price' => 70,
+        ]);
+
+        $response = $this->actingAs($this->owner)
+            ->post(route('app.products.labels.sheet'), ['labels' => []]);
+
+        $response->assertRedirect(route('app.products.labels'));
+        $this->assertStringContainsString('No product has a barcode yet', (string) session('error'));
+        $this->assertStringNotContainsString('beside a product', (string) session('error'));
+    }
+
+    public function test_the_button_is_absent_when_there_is_nothing_to_print(): void
+    {
+        // A button that can only fail is worse than no button: it invites the
+        // click and then blames the person for making it.
+        $this->setUpBusiness();
+
+        app(ProductService::class)->create([
+            'name' => 'No Barcode Here', 'type' => ProductType::Standard->value,
+            'selling_price' => 70,
+        ]);
+
+        $this->actingAs($this->owner)->get(route('app.products.labels'))
+            ->assertOk()
+            ->assertDontSee('Open print sheet')
+            ->assertSee('Nothing to print yet');
+    }
+
+    public function test_the_button_comes_back_once_something_has_a_barcode(): void
+    {
+        $this->setUpBusiness();
+
+        app(ProductService::class)->create([
+            'name' => 'Cola 500ml', 'type' => ProductType::Standard->value,
+            'selling_price' => 70, 'generate_barcode' => true,
+        ]);
+
+        $this->actingAs($this->owner)->get(route('app.products.labels'))
+            ->assertOk()
+            ->assertSee('Open print sheet')
+            ->assertDontSee('Nothing to print yet');
+    }
+
     public function test_all_zeroes_is_treated_the_same_as_nothing(): void
     {
         $this->setUpBusiness();

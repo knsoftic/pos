@@ -45,9 +45,20 @@
                     <span class="text-sm text-slate-700 dark:text-slate-300">Print the price</span>
                 </label>
 
-                <button type="submit" class="btn btn-primary w-full">
-                    <x-icon name="products" class="h-4 w-4" /> Open print sheet
-                </button>
+                @if ($products->total() > 0)
+                    <button type="submit" class="btn btn-primary w-full">
+                        <x-icon name="products" class="h-4 w-4" /> Open print sheet
+                    </button>
+                @else
+                    {{-- ⚠️ No button rather than a dead one. With no barcoded
+                         product there is nothing to print, and a button that
+                         can only fail is worse than no button: it invites the
+                         click and then blames the person for it. --}}
+                    <p class="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+                        Nothing to print yet. A label needs a barcode — open a product,
+                        tick <strong>Generate barcode</strong>, save, and it will appear here.
+                    </p>
+                @endif
             </div>
         </div>
 
