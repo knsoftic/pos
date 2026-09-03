@@ -220,6 +220,97 @@ class PlatformSettingsRoundTripTest extends TestCase
         $this->get(route('admin.settings.show', 'billing'))->assertRedirect();
     }
 
+    // ══════════════════════════════════ maintenance, through the real screen
+
+    public function test_ticking_the_box_on_the_screen_really_closes_the_site(): void
+    {
+        /*
+         | ⚠️ The other maintenance tests call the SERVICE. This one clicks the
+         | SCREEN, which is a different journey with more places to come apart:
+         | the form field is named platform__maintenance, the request has to map
+         | it back to a config key, the value has to reach the database, the
+         | overlay middleware has to put it on config, and only then does the
+         | maintenance middleware get to see it.
+         |
+         | "Maintenance on karne se site maintenance mein nahi jati" is a report
+         | about that whole journey, not about the switch.
+         */
+        $this->save('maintenance', ['platform__maintenance' => '1']);
+
+        // A shopkeeper, not signed in, on a fresh request.
+        $this->get(route('home'))->assertStatus(503);
+        $this->get(route('pricing'))->assertStatus(503);
+        $this->get(route('login'))->assertStatus(503);
+    }
+
+    public function test_unticking_it_opens_the_site_again(): void
+    {
+        $this->save('maintenance', ['platform__maintenance' => '1']);
+        $this->get(route('home'))->assertStatus(503);
+
+        // An unticked box posts nothing at all.
+        $this->save('maintenance', []);
+
+        $this->get(route('home'))->assertOk();
+    }
+
+    public function test_the_operator_never_sees_their_own_maintenance_page(): void
+    {
+        /*
+         | ⚠️ THE MOST LIKELY REASON SOMEBODY REPORTS THIS AS BROKEN.
+         |
+         | A signed-in operator passes straight through, by design — otherwise
+         | you could not check that a shop works before letting everyone back
+         | in. So the person who just ticked the box is the one person on the
+         | platform who cannot see its effect, and the site looks unchanged to
+         | exactly the eyes that went looking.
+         |
+         | The way to check is a private window, or any browser not signed in
+         | to /admin.
+         */
+        $this->save('maintenance', ['platform__maintenance' => '1']);
+
+        $this->actingAs($this->admin, 'admin')->get(route('home'))->assertOk();
+
+        // Take the operator's hat off before asking again -- otherwise the
+        // second request is the same person and answers the same way.
+        $this->app['auth']->forgetGuards();
+        $this->flushSession();
+
+        // The very same URL, to somebody who is not the operator.
+        $this->get(route('home'))->assertStatus(503);
+    }
+
+    public function test_the_banner_warns_that_the_operator_cannot_see_it(): void
+    {
+        // The fix for the report, as opposed to the fix for a bug: the switch
+        // worked all along, the screen just never said who it works on.
+        $this->save('maintenance', ['platform__maintenance' => '1']);
+
+        $this->actingAs($this->admin, 'admin')
+            ->get(route('admin.settings.show', 'maintenance'))
+            ->assertOk()
+            ->assertSee('Maintenance mode is ON.')
+            ->assertSee('You will not see it yourself')
+            ->assertSee('private window');
+    }
+
+    public function test_the_banner_hands_over_the_preview_token_when_there_is_one(): void
+    {
+        $this->save('maintenance', [
+            'platform__maintenance' => '1',
+            'platform__maintenance_token' => 'deploy-123',
+        ]);
+
+        // Copying it out of the field below and pasting it into a URL is a step
+        // that invites a typo, and a mistyped token is indistinguishable from a
+        // working maintenance page.
+        $this->actingAs($this->admin, 'admin')
+            ->get(route('admin.settings.show', 'maintenance'))
+            ->assertOk()
+            ->assertSee('?maintenance_token=deploy-123');
+    }
+
     // ═══════════════════════════════════════════════════════════ helpers
 
     /** @return array<string, array<string, mixed>> */
@@ -232,7 +323,18 @@ class PlatformSettingsRoundTripTest extends TestCase
         );
     }
 
-    /** Post to a group as the operator. */
+    /**
+     * Post to a group as the operator, then stop being the operator.
+     *
+     * ⚠️ forgetGuards() is the point of this helper. actingAs() keeps the
+     * admin signed in for every later request in the test, and a signed-in
+     * admin walks straight through maintenance mode by design — so without
+     * this, a maintenance test would assert 200 and "prove" a bug that is
+     * really the test still wearing the operator's hat.
+     *
+     * The real world does the same thing: the operator ticks the box in their
+     * browser, and the shopkeeper arrives in a different one.
+     */
     protected function save(string $group, array $payload): void
     {
         $this->actingAs($this->admin, 'admin')
@@ -240,6 +342,9 @@ class PlatformSettingsRoundTripTest extends TestCase
             ->assertSessionHasNoErrors();
 
         app(PlatformSettingsService::class)->flush();
+
+        $this->app['auth']->forgetGuards();
+        $this->flushSession();
     }
 
     /**

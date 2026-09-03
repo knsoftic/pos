@@ -28,6 +28,30 @@
                         Every shop's workspace and the public site are closed right now. This panel stays open —
                         it is how you turn it off.
                     </p>
+
+                    {{-- ⚠️ Said out loud because the trap is real: the one person
+                         who just ticked this box is the one person who cannot
+                         see its effect. Signed-in operators pass straight
+                         through — on purpose, so a shop can be checked before
+                         everyone is let back in — which makes the site look
+                         completely unchanged to exactly the eyes that go and
+                         look. It reads as "the switch does not work". --}}
+                    <p class="mt-3 border-t border-rose-200 pt-3 text-sm text-rose-700 dark:border-rose-500/30 dark:text-rose-300/80">
+                        <strong>You will not see it yourself.</strong> You are signed in here, so every page still
+                        opens normally for you — that is deliberate, it is how you check a shop works before
+                        letting everyone back in.
+                        @if (config('platform.maintenance_token'))
+                            To see what shopkeepers see, open
+                            <a href="{{ route('home') }}" target="_blank" rel="noopener" class="underline">the site</a>
+                            in a private window — and add
+                            <code class="rounded bg-rose-100 px-1 py-0.5 text-xs dark:bg-rose-500/20">?maintenance_token={{ config('platform.maintenance_token') }}</code>
+                            to get back in without signing in.
+                        @else
+                            To see what shopkeepers see, open
+                            <a href="{{ route('home') }}" target="_blank" rel="noopener" class="underline">the site</a>
+                            in a private window.
+                        @endif
+                    </p>
                 </div>
             @endif
 
