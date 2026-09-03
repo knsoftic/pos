@@ -46,6 +46,59 @@ class FormsWithoutJavaScriptTest extends TestCase
         $this->admin = Admin::factory()->create();
     }
 
+    public function test_a_confirm_button_still_works_when_alpine_is_absent(): void
+    {
+        /*
+         | ⚠️ THE SECOND HALF OF THE SAME OUTAGE, and it took longer to see.
+         |
+         | Two separate things run behind every "are you sure?" in this app: a
+         | plain inline listener that cancels the submit, and an Alpine dialog
+         | that is supposed to answer it. When Livewire's asset 404'd, Alpine
+         | never loaded -- but the listener did. So it cancelled the submit,
+         | dispatched an event into an empty room, and stopped there.
+         |
+         | Every confirm button in the application became a button that did
+         | nothing. No error, no dialog, no submit, no clue. "Back to defaults"
+         | on all four settings tabs is one of them.
+         |
+         | So: the dialog must MARK the event handled, and the listener must
+         | fall back to the browser's own confirm() when nothing does.
+         */
+        $html = $this->actingAs($this->admin, 'admin')
+            ->get(route('admin.settings.show', 'branding'))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringContainsString('data-confirm', $html, 'This page should carry a confirm form.');
+
+        // The dialog says "I am here"...
+        $this->assertStringContainsString('detail.handled = true', $html);
+
+        // ...and the listener checks, rather than assuming.
+        $this->assertStringContainsString('if (detail.handled)', $html);
+
+        // ...and does something real when nobody answered.
+        $this->assertStringContainsString('window.confirm(', $html);
+    }
+
+    public function test_the_confirm_listener_never_cancels_a_submit_it_cannot_finish(): void
+    {
+        // A narrower way of saying the same thing, aimed at whoever edits this
+        // next: preventDefault() is a promise to submit the form later. Every
+        // path out of that listener must either submit or ask a human first.
+        $js = File::get(resource_path('views/components/confirm-dialog.blade.php'));
+
+        $listener = substr($js, strpos($js, "addEventListener('submit'"));
+
+        $this->assertStringContainsString('preventDefault()', $listener);
+        $this->assertStringContainsString('window.confirm(', $listener);
+        $this->assertLessThan(
+            strpos($listener, 'window.confirm('),
+            strpos($listener, 'preventDefault()'),
+            'The fallback must come after the cancellation it is there to undo.',
+        );
+    }
+
     public function test_a_plans_enabled_cycles_survive_a_page_with_no_javascript(): void
     {
         $plan = Plan::factory()->monthly()->create(['name' => 'Checked Plan']);

@@ -14,9 +14,22 @@
 
     ================= WHAT MAKES IT SAFE =================
     The form is only submitted from the dialog's own confirm button, and the
-    listener re-submits with a flag so it does not intercept itself. If the
-    JavaScript never runs, the form submits normally — a broken dialog must not
-    become a broken application.
+    listener re-submits with a flag so it does not intercept itself.
+
+    ⚠️ THE FAILURE THAT WAS HERE, because it is the one worth remembering.
+    "If the JavaScript never runs, the form submits normally" was written here
+    and was NOT true. Two different things run: this listener is plain inline
+    JavaScript, while the dialog that answers it is Alpine. On the live site
+    Livewire's asset 404'd and Alpine — which ships inside Livewire here — never
+    loaded. So the listener ran, called preventDefault(), dispatched into a room
+    with nobody in it, and every confirm button in the application became a
+    button that did nothing at all. No error, no dialog, no submit.
+
+    Now the dialog marks the event as handled. If nothing marks it, the browser's
+    own confirm() is used instead — the very dialog this component replaced, kept
+    as the floor rather than the ceiling. Should even that be suppressed (some
+    mobile browsers do), it returns false and the destructive action does not
+    happen, which is the safe direction to fail in.
 --}}
 <div x-data="confirmDialog()" x-on:confirm-request.window="open($event.detail)">
     <div x-show="showing" x-cloak
@@ -68,6 +81,11 @@
                 form: null,
 
                 open(detail) {
+                    // Tells the dispatcher somebody is home. Without this the
+                    // page cannot tell "dialog shown" from "Alpine never
+                    // loaded", and those two must not look the same.
+                    detail.handled = true;
+
                     this.title = detail.title;
                     this.body = detail.body || '';
                     this.confirmLabel = detail.confirmLabel || 'Confirm';
@@ -115,15 +133,37 @@
                 form.requestSubmit ? form.requestSubmit() : form.submit();
             };
 
-            window.dispatchEvent(new CustomEvent('confirm-request', {
-                detail: {
-                    title: form.dataset.confirm,
-                    body: form.dataset.confirmBody || '',
-                    confirmLabel: form.dataset.confirmLabel || 'Yes, continue',
-                    danger: form.dataset.confirmDanger !== '0',
-                    form: { requestSubmit: proceed, submit: proceed },
-                },
-            }));
+            const detail = {
+                title: form.dataset.confirm,
+                body: form.dataset.confirmBody || '',
+                confirmLabel: form.dataset.confirmLabel || 'Yes, continue',
+                danger: form.dataset.confirmDanger !== '0',
+                handled: false,
+                form: { requestSubmit: proceed, submit: proceed },
+            };
+
+            // Alpine's listener is synchronous, so by the time dispatchEvent
+            // returns, `handled` is settled.
+            window.dispatchEvent(new CustomEvent('confirm-request', { detail }));
+
+            if (detail.handled) {
+                return;
+            }
+
+            /*
+             | ⚠️ Nobody answered — Alpine is not running. This listener has
+             | already cancelled the submit, so doing nothing here would leave a
+             | dead button, which is what happened in production.
+             |
+             | Fall back to the browser's own dialog. It is ugly and it is the
+             | thing this component was written to replace, but an ugly "are you
+             | sure?" beats a button that silently ignores you. If the browser
+             | suppresses it, confirm() returns false and the destructive action
+             | does not happen — the safe direction.
+             */
+            if (window.confirm(detail.title + (detail.body ? '\n\n' + detail.body : ''))) {
+                proceed();
+            }
         }, true);
     </script>
     @endpush
