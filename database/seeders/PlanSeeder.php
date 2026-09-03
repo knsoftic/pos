@@ -162,7 +162,7 @@ class PlanSeeder extends Seeder
      * customer walking off mid-transaction is not a premium event; a till that
      * cannot park a basket is a till that loses the queue behind it.
      *
-     * ⚠️ Four of these are here because nothing gates them — see
+     * ⚠️ Three of these are here because nothing gates them — see
      * {@see self::worksRegardlessOfPlan()}. On everywhere, or the matrix lies
      * about what the cheap tier is missing.
      *
@@ -172,6 +172,21 @@ class PlanSeeder extends Seeder
     {
         return array_merge(self::worksRegardlessOfPlan(), [
             F::POS_TERMINAL,
+
+            /*
+             | ⚠️ GATED, but gated on the LABEL SHEET rather than on scanning.
+             | Scanning at the till is just typing into the search box and no
+             | code checks the plan for it; what `feature:pos.barcode_scanner`
+             | actually guards is /app/products/labels, where a shop prints its
+             | own codes for loose goods.
+             |
+             | It sits in Free because a shop weighing out rice cannot scan
+             | anything until it has printed a label for it — selling the
+             | printer separately from the scanner would leave the cheap tier
+             | with a reader and nothing to read.
+             */
+            F::POS_BARCODE_SCANNER,
+
             F::INVENTORY_STOCK_TRACKING,
             F::INVENTORY_ADJUSTMENTS,
             F::SALES_INVOICING,
@@ -188,12 +203,17 @@ class PlanSeeder extends Seeder
      * Built, working, and gated by nothing — so every shop has them whatever
      * its plan says.
      *
-     * These are not separable capabilities. Scanning a barcode is typing into
-     * the search box. Holding a sale is a status on a row. Splitting a tender
-     * is two rows in `sale_payments` instead of one. The low-stock warning is a
-     * column compared against a quantity. There is no seam to charge at, and
-     * writing a gate around one would be inventing a restriction to sell rather
-     * than building something.
+     * These are not separable capabilities. Holding a sale is a status on a row.
+     * Splitting a tender is two rows in `sale_payments` instead of one. The
+     * low-stock warning is a column compared against a quantity. There is no
+     * seam to charge at, and writing a gate around one would be inventing a
+     * restriction to sell rather than building something.
+     *
+     * ⚠️ Barcode scanning was on this list and should not have been. It IS
+     * gated -- but as a middleware STRING, `feature:pos.barcode_scanner`, not as
+     * a constant, so the scan that decides this missed it. The list was right
+     * about the plan (it belongs in Free either way) and wrong about the reason,
+     * which is exactly the kind of wrong that survives a review.
      *
      * ⚠️ So they belong in EVERY tier. Put one on a paid plan and the pricing
      * matrix tells the cheap tier it is missing something it uses all day.
@@ -207,7 +227,6 @@ class PlanSeeder extends Seeder
     public static function worksRegardlessOfPlan(): array
     {
         return [
-            F::POS_BARCODE_SCANNER,
             F::POS_HOLD_SALES,
             F::POS_SPLIT_PAYMENT,
             F::INVENTORY_LOW_STOCK_ALERTS,

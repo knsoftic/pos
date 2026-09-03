@@ -310,7 +310,23 @@ class PlanCatalogueTest extends TestCase
         $found = [];
 
         foreach ($constants as $name => $code) {
-            if (preg_match('/(?:FeatureRegistry|F)::'.preg_quote($name, '/').'\b/', $source)) {
+            /*
+             | ⚠️ TWO SPELLINGS, and missing the second one has already caused a
+             | wrong answer. Most gates name the constant — FeatureRegistry::X —
+             | but route middleware writes the raw code as a string:
+             |
+             |     Route::middleware(['feature:pos.barcode_scanner'])
+             |
+             | Scanning only for constants declared that feature ungated, which
+             | put it on the "works regardless of plan" list and produced a
+             | confident, wrong statement that barcode labels are available on
+             | every plan. A scan that under-reports fails in the direction that
+             | hides things, which is the worst direction for this file.
+             */
+            $gated = preg_match('/(?:FeatureRegistry|F)::'.preg_quote($name, '/').'\b/', $source)
+                || str_contains($source, 'feature:'.$code);
+
+            if ($gated) {
                 $found[] = $code;
             }
         }
