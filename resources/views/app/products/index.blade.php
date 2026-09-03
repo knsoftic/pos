@@ -154,6 +154,22 @@
                             </td>
                             <td class="px-5 py-3">
                                 <div class="flex items-center justify-end gap-1">
+                                    {{-- ⚠️ THE ONLY WAY IN for a product that has no stock yet.
+                                         The Inventory list is built from `stocks` rows, and a
+                                         product with no movement has none — so it never appears
+                                         there, and every other link to this ledger comes FROM
+                                         there. Without this, a new product's opening stock could
+                                         only be entered by raising a purchase order, while the
+                                         empty state cheerfully said stock appears once something
+                                         is "adjusted". --}}
+                                    @can(\App\Support\PermissionRegistry::INVENTORY_VIEW)
+                                        @if ($product->track_inventory)
+                                            <a href="{{ route('app.inventory.ledger', $product) }}" class="btn btn-ghost !px-2" title="Stock &amp; movements">
+                                                <x-icon name="inventory" class="h-4 w-4" />
+                                            </a>
+                                        @endif
+                                    @endcan
+
                                     @can(\App\Support\PermissionRegistry::PRODUCTS_UPDATE)
                                         <a href="{{ route('app.products.edit', $product) }}" class="btn btn-ghost !px-2" title="Edit">
                                             <x-icon name="pencil" class="h-4 w-4" />

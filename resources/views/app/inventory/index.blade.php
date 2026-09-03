@@ -175,8 +175,15 @@
                                 @if (array_filter($filters))
                                     Nothing matches those filters.
                                 @else
-                                    No stock movements yet. Stock appears here the first time something is purchased,
-                                    adjusted or counted in.
+                                    No stock movements yet — this list is built from what has actually
+                                    moved, so a product nobody has counted in does not appear.
+                                    @can(\App\Support\PermissionRegistry::PRODUCTS_VIEW)
+                                        Open <a href="{{ route('app.products.index') }}" class="text-brand-600 hover:underline dark:text-brand-400">Products</a>
+                                        and use the stock button on a row to enter its opening quantity,
+                                    @else
+                                        Enter a product's opening quantity from its own page,
+                                    @endcan
+                                    or receive a purchase.
                                 @endif
                             </td>
                         </tr>
