@@ -3,6 +3,7 @@
 namespace Tests\Feature\Inventory;
 
 use App\Enums\ProductType;
+use App\Enums\StockMovementType;
 use App\Models\Business;
 use App\Models\Feature;
 use App\Models\Limit;
@@ -118,6 +119,53 @@ class OpeningStockReachableTest extends TestCase
             ->get(route('app.inventory.ledger', $product))
             ->assertOk()
             ->assertSee(route('app.inventory.adjust'), escape: false);
+    }
+
+    public function test_a_new_product_can_carry_its_opening_stock_on_the_form(): void
+    {
+        // The direct answer to "stock add ka option hi nahi hai": you should be
+        // able to say what is already on the shelf while creating the product,
+        // not hunt for a second screen afterwards.
+        $this->actingAs($this->owner)->post(route('app.products.store'), [
+            'name' => 'Counted In On Day One',
+            'type' => ProductType::Standard->value,
+            'cost_price' => 40,
+            'selling_price' => 100,
+            'track_inventory' => 1,
+            'opening_stock' => 12,
+        ])->assertRedirect();
+
+        $product = Product::query()->where('name', 'Counted In On Day One')->firstOrFail();
+
+        $this->assertSame(12.0, (float) Stock::query()->allBranches()
+            ->where('product_id', $product->id)->firstOrFail()->quantity);
+
+        // ⚠️ It must be a MOVEMENT, not a number written onto the shelf.
+        // `stocks` is a cache of the ledger; a quantity with no line behind it
+        // would make pos:check-integrity right to complain.
+        $this->assertDatabaseHas('stock_movements', [
+            'product_id' => $product->id,
+            'type' => StockMovementType::Opening->value,
+            'quantity' => 12,
+        ]);
+    }
+
+    public function test_the_edit_form_refuses_to_retype_the_balance(): void
+    {
+        $product = $this->freshProduct();
+
+        // Stock is the sum of a ledger. Changing it later is an adjustment,
+        // which carries a reason — an edit form that could overwrite the
+        // balance would let the shelf and the ledger disagree silently.
+        $this->actingAs($this->owner)->put(route('app.products.update', $product), [
+            'name' => 'Never Counted In',
+            'type' => ProductType::Standard->value,
+            'selling_price' => 250,
+            'track_inventory' => 1,
+            'opening_stock' => 999,
+        ])->assertSessionHasErrors('opening_stock');
+
+        $this->assertSame(0, Stock::query()->allBranches()->where('product_id', $product->id)->count());
     }
 
     public function test_opening_stock_can_actually_be_entered(): void

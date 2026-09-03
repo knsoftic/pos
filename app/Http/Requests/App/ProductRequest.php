@@ -76,6 +76,18 @@ class ProductRequest extends FormRequest
             'tax_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
 
             'track_inventory' => ['boolean'],
+
+            /*
+             | What is already on the shelf the day the product is entered.
+             |
+             | ⚠️ CREATE ONLY. On an edit this field does not exist, and that is
+             | deliberate: stock is the sum of a movement ledger, not a number
+             | you can retype. Changing it later is an adjustment, which carries
+             | a reason and leaves a line. Letting an edit form overwrite the
+             | balance would make the ledger and the shelf disagree with nobody
+             | able to say why.
+             */
+            'opening_stock' => [$this->product() === null ? 'nullable' : 'prohibited', 'numeric', 'min:0', 'max:99999999'],
             'tracks_batches' => ['boolean'],
             'alert_quantity' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
             'is_active' => ['boolean'],
@@ -149,6 +161,9 @@ class ProductRequest extends FormRequest
             'alert_quantity' => $this->input('alert_quantity'),
             'is_active' => $this->boolean('is_active'),
             'generate_barcode' => $this->boolean('generate_barcode'),
+
+            // Only meaningful on create; the rules prohibit it on an edit.
+            'opening_stock' => (float) ($this->input('opening_stock') ?: 0),
         ];
 
         if ($this->hasFile('image')) {

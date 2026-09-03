@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\ProductType;
+use App\Enums\StockMovementType;
 use App\Exceptions\FeatureUnavailableException;
 use App\Exceptions\LimitExceededException;
 use App\Models\Brand;
@@ -44,6 +45,7 @@ class ProductService
         protected FeatureService $features,
         protected PlanLimitService $limits,
         protected AuditService $audit,
+        protected InventoryService $inventory,
     ) {}
 
     /**
@@ -92,11 +94,35 @@ class ProductService
             $this->syncVariants($product, $variants);
 
             $this->limits->flush();
+            /*
+             | Opening stock, if the shop said what is already on the shelf.
+             |
+             | Inside the same transaction on purpose: a product that exists
+             | with the wrong quantity is worse than one that was refused, and
+             | the shop would have no way of knowing which it got.
+             |
+             | It goes through InventoryService like every other change, so it
+             | is a real Opening movement with a balance_after — not a number
+             | written straight onto the shelf. `stocks` stays a cache of the
+             | ledger, which is the one rule this table has.
+             */
+            $opening = (float) ($data['opening_stock'] ?? 0);
+
+            if ($opening > 0 && $product->track_inventory && ! $product->hasVariants()) {
+                $this->inventory->createMovement([
+                    'product' => $product,
+                    'type' => StockMovementType::Opening,
+                    'quantity' => $opening,
+                    'unit_cost' => (float) $product->cost_price,
+                    'reason' => 'Opening stock',
+                ]);
+            }
+
             $this->audit->log(
                 'product.created',
                 $product,
                 "Product \"{$product->name}\" created.",
-                ['sku' => $product->sku, 'type' => $type->value],
+                ['sku' => $product->sku, 'type' => $type->value, 'opening_stock' => $opening ?: null],
             );
 
             return $product;

@@ -743,18 +743,56 @@ class ReportService
     /** @param array<string, mixed> $c */
     protected function buildInventoryValuation(array $c): array
     {
+        /*
+         | What the shelf cost, what it should fetch, and the difference.
+         |
+         | ⚠️ THE PROFIT COLUMN HERE IS NOT EARNED PROFIT. Nothing has been sold.
+         | It is what this stock WOULD make at today's selling price if all of it
+         | went at full price, and reality subtracts discounts, breakage and
+         | whatever never sells. Realised profit is the Profit reports, which
+         | count actual sales at their snapshotted cost.
+         |
+         | A NEGATIVE figure is the useful one: it means the shelf is priced
+         | below what it cost, and every sale of it loses money. That is worth
+         | finding before the month ends, so those rows sort to the top.
+         */
         $rows = $this->stockQuery($c)
+            ->with(['product:id,name,sku,alert_quantity,category_id,selling_price', 'variant:id,name,alert_quantity,selling_price'])
             ->get()
-            ->map(fn (Stock $s) => [
-                'name' => $this->shelfName($s),
-                'sku' => $s->product?->sku,
-                'branch' => $s->branch?->name,
-                'quantity' => round((float) $s->quantity, 4),
-                'cost' => round((float) $s->average_cost, 4),
-                'value' => $s->value(),
+            ->map(function (Stock $s): array {
+                $quantity = round((float) $s->quantity, 4);
+                $cost = round((float) $s->average_cost, 4);
+
+                // A variant carries its own price; a simple product its own.
+                $price = (float) ($s->variant?->selling_price ?? $s->product?->selling_price ?? 0);
+
+                $value = $s->value();
+                $retail = round($quantity * $price, 2);
+
+                return [
+                    'name' => $this->shelfName($s),
+                    'sku' => $s->product?->sku,
+                    'branch' => $s->branch?->name,
+                    'quantity' => $quantity,
+                    'cost' => $cost,
+                    'value' => $value,
+                    'price' => round($price, 2),
+                    'retail' => $retail,
+                    // Rounded to money BEFORE subtracting, in the same order
+                    // ProfitService does it — rounding is not associative.
+                    'profit' => round($retail - $value, 2),
+                    'margin' => $retail > 0 ? round((($retail - $value) / $retail) * 100, 2) : null,
+                ];
+            })
+            ->sortBy([
+                // Anything priced below cost first, then by what it is worth.
+                fn (array $a, array $b) => ($a['profit'] < 0 ? 0 : 1) <=> ($b['profit'] < 0 ? 0 : 1),
+                fn (array $a, array $b) => $b['value'] <=> $a['value'],
             ])
-            ->sortByDesc('value')
             ->values();
+
+        $value = round($rows->sum('value'), 2);
+        $retail = round($rows->sum('retail'), 2);
 
         return [
             'columns' => [
@@ -763,10 +801,21 @@ class ReportService
                 ['key' => 'branch', 'label' => 'Branch', 'format' => 'text'],
                 ['key' => 'quantity', 'label' => 'On hand', 'format' => 'quantity', 'align' => 'right'],
                 ['key' => 'cost', 'label' => 'Average cost', 'format' => 'money', 'align' => 'right'],
-                ['key' => 'value', 'label' => 'Value', 'format' => 'money', 'align' => 'right', 'emphasis' => true],
+                ['key' => 'value', 'label' => 'Cost value', 'format' => 'money', 'align' => 'right', 'emphasis' => true],
+                ['key' => 'price', 'label' => 'Selling price', 'format' => 'money', 'align' => 'right'],
+                ['key' => 'retail', 'label' => 'Retail value', 'format' => 'money', 'align' => 'right'],
+                ['key' => 'profit', 'label' => 'Potential profit', 'format' => 'money', 'align' => 'right', 'emphasis' => true],
+                ['key' => 'margin', 'label' => 'Margin %', 'format' => 'percent', 'align' => 'right'],
             ],
             'rows' => $rows,
-            'totals' => ['name' => 'Total', 'quantity' => round($rows->sum('quantity'), 4), 'value' => round($rows->sum('value'), 2)],
+            'totals' => [
+                'name' => 'Total',
+                'quantity' => round($rows->sum('quantity'), 4),
+                'value' => $value,
+                'retail' => $retail,
+                'profit' => round($retail - $value, 2),
+                'margin' => $retail > 0 ? round((($retail - $value) / $retail) * 100, 2) : null,
+            ],
         ];
     }
 

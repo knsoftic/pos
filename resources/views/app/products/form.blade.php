@@ -305,6 +305,28 @@
     {{-- --------------------------------------------------------- status --}}
     <div class="card p-5">
         <div class="space-y-3">
+            @unless ($product->exists)
+                {{-- ⚠️ CREATE ONLY, and the edit form deliberately has no such
+                     field. Stock is the sum of a movement ledger, not a number
+                     to retype: changing it later is an adjustment, which carries
+                     a reason and leaves a line somebody can read. A quantity box
+                     on the edit screen would let the shelf and the ledger
+                     disagree with nobody able to say why. --}}
+                <div x-show="type === '{{ ProductType::Standard->value }}'" x-cloak>
+                    <label for="opening_stock" class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                        Stock on hand today <span class="text-slate-400">(optional)</span>
+                    </label>
+                    <input id="opening_stock" name="opening_stock" type="number" step="0.0001" min="0"
+                           value="{{ old('opening_stock') }}" placeholder="0" class="input md:max-w-xs tabular-nums" />
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        How many you already have. It is filed as an opening movement at the cost price
+                        above, so the figure has a reason behind it from day one. Leave it empty and the
+                        product starts at zero — you can count it in later from its stock page.
+                    </p>
+                    @error('opening_stock') <p class="mt-1 text-xs text-rose-600 dark:text-rose-400">{{ $message }}</p> @enderror
+                </div>
+            @endunless
+
             <label class="flex cursor-pointer items-start gap-3" x-show="type !== '{{ ProductType::Service->value }}'" x-cloak>
                 <input type="checkbox" name="track_inventory" value="1"
                        @checked(old('track_inventory', $product->exists ? $product->track_inventory : true))
