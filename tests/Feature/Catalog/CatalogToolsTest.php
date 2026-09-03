@@ -26,6 +26,7 @@ use Database\Seeders\LimitSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 /**
@@ -170,6 +171,73 @@ class CatalogToolsTest extends TestCase
 
         $response->assertOk();
         $this->assertSame(3, substr_count($response->getContent(), '<div class="label">'));
+    }
+
+    public function test_pressing_print_with_nothing_typed_is_not_an_error(): void
+    {
+        /*
+         | ⚠️ THE MOST LIKELY THING TO HAPPEN ON THIS SCREEN. Every row posts a
+         | quantity box and all of them start blank, so pressing the button
+         | first and reading the form second is ordinary behaviour.
+         |
+         | It used to abort(422) -- and 422 had no error view, so it fell
+         | through to Symfony's own page: "Something is broken. Please let us
+         | know what you were doing." Nothing was broken. Telling a shopkeeper
+         | their software is faulty because they have not finished typing
+         | teaches them to ignore the next error, which will be a real one.
+         */
+        $this->setUpBusiness();
+
+        app(ProductService::class)->create([
+            'name' => 'Cola 500ml', 'type' => ProductType::Standard->value,
+            'selling_price' => 70, 'generate_barcode' => true,
+        ]);
+
+        $response = $this->actingAs($this->owner)->post(route('app.products.labels.sheet'), [
+            'labels' => [],
+        ]);
+
+        // ⚠️ Sent somewhere, not just refused. The form opens in a NEW TAB, so
+        // that tab has no history -- "go back" is not available to the person
+        // reading it, and a bare 422 would strand them on a dead page.
+        $response->assertRedirect(route('app.products.labels'));
+        $response->assertSessionHas('error');
+        $this->assertStringNotContainsString('Something is broken', (string) $response->getContent());
+    }
+
+    public function test_all_zeroes_is_treated_the_same_as_nothing(): void
+    {
+        $this->setUpBusiness();
+
+        $product = app(ProductService::class)->create([
+            'name' => 'Cola 500ml', 'type' => ProductType::Standard->value,
+            'selling_price' => 70, 'generate_barcode' => true,
+        ]);
+
+        // Typing 0 is a person saying "none of this one", not a fault.
+        $this->actingAs($this->owner)
+            ->post(route('app.products.labels.sheet'), ['labels' => [$product->id => 0]])
+            ->assertRedirect(route('app.products.labels'));
+    }
+
+    public function test_a_422_gets_the_applications_own_page_not_symfonys(): void
+    {
+        /*
+         | 422 is used in about a dozen places -- "Only a draft can be edited",
+         | "That sale is not on hold" -- and had no view of its own, so every
+         | one of them announced that the software was broken over a rule it was
+         | enforcing on purpose.
+         |
+         | The abort message is the useful half and must survive to the page.
+         */
+        $this->setUpBusiness();
+
+        $view = view('errors.422', [
+            'exception' => new HttpException(422, 'Only a draft can be edited.'),
+        ])->render();
+
+        $this->assertStringContainsString('Only a draft can be edited.', $view);
+        $this->assertStringNotContainsString('Something is broken', $view);
     }
 
     public function test_the_label_screen_is_plan_gated(): void

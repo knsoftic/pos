@@ -5,6 +5,7 @@ namespace App\Http\Controllers\App;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Support\PermissionRegistry;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -45,21 +46,41 @@ class BarcodeLabelController extends Controller
      * ask for three of one product and twenty of another — which is what
      * actually happens when a delivery is priced up.
      */
-    public function sheet(Request $request): View
+    public function sheet(Request $request): View|RedirectResponse
     {
         $validated = $request->validate([
-            'labels' => ['required', 'array', 'min:1'],
+            'labels' => ['sometimes', 'array'],
             'labels.*' => ['nullable', 'integer', 'min:0', 'max:200'],
             'show_price' => ['boolean'],
             'show_name' => ['boolean'],
             'label_width' => ['nullable', 'numeric', 'min:20', 'max:120'],
         ]);
 
-        $wanted = collect($validated['labels'])
+        $wanted = collect($validated['labels'] ?? [])
             ->map(fn ($count) => (int) $count)
             ->filter(fn ($count) => $count > 0);
 
-        abort_if($wanted->isEmpty(), 422, 'Choose how many labels you need.');
+        /*
+         | ⚠️ EMPTY IS NOT AN ERROR. Every row on the form posts a quantity box,
+         | all of them blank to begin with, so pressing the button before typing
+         | anything is the single most likely thing to happen on this screen --
+         | and it used to abort(422), which had no error view and so landed on
+         | Symfony's own page announcing "Something is broken."
+         |
+         | Nothing was broken. The shop had not said how many labels it wanted.
+         | Telling somebody their software is faulty because they have not
+         | finished filling in a form teaches them to distrust every real error
+         | that follows.
+         |
+         | ⚠️ And the form opens in a NEW TAB, so there is no going back with
+         | the browser button -- the tab has no history. It has to be sent
+         | somewhere useful under its own steam.
+         */
+        if ($wanted->isEmpty()) {
+            return redirect()
+                ->route('app.products.labels')
+                ->with('error', 'Type how many labels you need beside a product, then open the sheet.');
+        }
 
         $products = Product::query()
             ->whereIn('id', $wanted->keys())
@@ -83,7 +104,13 @@ class BarcodeLabelController extends Controller
             }
         }
 
-        abort_if($labels === [], 422, 'None of those products has a barcode.');
+        // Same reasoning: a product can lose its barcode between loading the
+        // list and submitting it. That is a thing to explain, not to fault.
+        if ($labels === []) {
+            return redirect()
+                ->route('app.products.labels')
+                ->with('error', 'None of those products has a barcode any more. Give them one first.');
+        }
 
         return view('app.products.label-sheet', [
             'labels' => $labels,
