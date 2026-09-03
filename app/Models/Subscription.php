@@ -7,6 +7,7 @@ use App\Enums\PaymentStatus;
 use App\Enums\SubscriptionStatus;
 use App\Models\Concerns\BelongsToTenant;
 use App\Services\SubscriptionService;
+use App\Support\Format;
 use Carbon\CarbonInterface;
 use Database\Factories\SubscriptionFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -252,10 +253,7 @@ class Subscription extends Model
 
     public function formattedPrice(): string
     {
-        return ($this->currency === config('subscription.currency')
-                ? config('subscription.currency_symbol')
-                : $this->currency.' ')
-            .number_format((float) $this->price, (int) config('subscription.currency_decimals'));
+        return Format::billingMoney($this->price, $this->currency);
     }
 
     /** Total settled money received against this subscription. */

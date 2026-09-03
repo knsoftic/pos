@@ -8,13 +8,17 @@ use App\Http\Controllers\Controller;
 use App\Models\Feature;
 use App\Models\Limit;
 use App\Models\Plan;
+use App\Models\PlanRequest;
 use App\Models\SubscriptionPayment;
 use App\Services\FeatureService;
 use App\Services\PlanLimitService;
+use App\Services\PlanRequestService;
 use App\Services\SubscriptionService;
 use App\Support\FeatureRegistry;
 use App\Support\LimitRegistry;
 use App\Support\TenantContext;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /**
@@ -35,6 +39,7 @@ class BillingController extends Controller
         protected SubscriptionService $subscriptions,
         protected FeatureService $features,
         protected PlanLimitService $limits,
+        protected PlanRequestService $planRequests,
     ) {}
 
     public function index(TenantContext $tenant): View
@@ -88,6 +93,7 @@ class BillingController extends Controller
             ->get();
 
         return view('app.billing.plans', [
+            'openRequest' => PlanRequest::query()->pending()->with('plan')->first(),
             'business' => $business,
             'subscription' => $subscription,
             'currentPlanId' => $currentPlanId,
@@ -106,5 +112,33 @@ class BillingController extends Controller
                 $p->id => $p->limits->mapWithKeys(fn ($l) => [$l->id => $l->pivot->value])->all(),
             ])->all(),
         ]);
+    }
+
+    /**
+     * "I want this plan." (#82)
+     *
+     * ⚠️ FILES A REQUEST, CHANGES NOTHING. No self-serve checkout in this
+     * release -- the operator moves the shop and takes the money. What this
+     * fixes is the button that used to be a mailto:, which needed a configured
+     * mail client on the shopkeeper's device and left no trace anywhere when
+     * there wasn't one.
+     *
+     * A private plan cannot be asked for: those exist for the operator to
+     * assign, and letting a shop request one by id would turn a negotiated
+     * price into a menu item.
+     */
+    public function requestPlan(Request $request, Plan $plan): RedirectResponse
+    {
+        abort_unless($plan->is_active && $plan->is_public, 404);
+
+        $cycle = BillingCycle::tryFrom((string) $request->input('cycle'));
+
+        $planRequest = $this->planRequests->open($plan, $cycle);
+
+        return back()
+            ->with('success', "Request sent for \"{$plan->name}\". We will contact you shortly.")
+            // The view offers this as a button rather than redirecting into it:
+            // a redirect off-site would lose the confirmation the shop just got.
+            ->with('whatsapp', $this->planRequests->whatsappLink($planRequest));
     }
 }

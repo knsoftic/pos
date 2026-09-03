@@ -70,6 +70,17 @@ class PlatformSettingRegistry
                 'type' => 'string',
                 'rules' => ['nullable', 'email', 'max:190'],
             ],
+            'brand.whatsapp' => [
+                'group' => 'branding',
+                'label' => 'WhatsApp number for plan requests',
+                'help' => 'Country code and digits only, no + and no spaces -- 923001234567. '
+                    .'When a shop asks for a plan, this is the number their message opens against. '
+                    .'Leave it empty and the request is still filed, it just has no WhatsApp button.',
+                'type' => 'string',
+                // Digits only, on purpose: wa.me rejects anything else, and a
+                // number with a + or a dash silently opens an empty chat.
+                'rules' => ['nullable', 'string', 'max:20', 'regex:/^[0-9]*$/'],
+            ],
             'brand.support_phone' => [
                 'group' => 'branding',
                 'label' => 'Support phone',

@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\BusinessSubscriptionController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
 use App\Http\Controllers\Admin\ImpersonationController;
 use App\Http\Controllers\Admin\PlanController;
+use App\Http\Controllers\Admin\PlanRequestController;
 use App\Http\Controllers\Admin\PlatformSettingsController;
 use App\Http\Controllers\Admin\SystemNotificationController;
 use App\Http\Controllers\App\BarcodeLabelController;
@@ -132,6 +133,13 @@ Route::middleware('tenant.app')
         // — see CheckSubscription::$alwaysAllowed.
         Route::get('billing', [BillingController::class, 'index'])->name('billing.index');
         Route::get('billing/plans', [BillingController::class, 'plans'])->name('billing.plans');
+
+        // Asking for a plan is a POST because it writes a row. It sits beside
+        // the read-only screens above -- inside the same allow-list -- so a
+        // lapsed tenant can still ask to be put right, which is precisely when
+        // they most need to.
+        Route::post('billing/plans/{plan}/request', [BillingController::class, 'requestPlan'])
+            ->name('billing.plans.request');
 
         /*
         |--------------------------------------------------------------------
@@ -701,6 +709,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('subscriptions', [BusinessSubscriptionController::class, 'index'])->name('subscriptions.index');
 
         // ---------------------------------------------- system alerts (#179)
+        // ---------------------------------------- plan requests (#82)
+        // A shop asking to change plan. Read and answer only -- moving them
+        // onto the plan is a separate act on the subscription screen, by
+        // somebody who has seen the money.
+        Route::get('plan-requests', [PlanRequestController::class, 'index'])->name('plan-requests.index');
+        Route::put('plan-requests/{planRequest}', [PlanRequestController::class, 'update'])->name('plan-requests.update');
+
         // ---------------------------------------- announcements (#77)
         Route::get('announcements', [AnnouncementController::class, 'index'])->name('announcements.index');
         Route::post('announcements', [AnnouncementController::class, 'store'])->name('announcements.store');

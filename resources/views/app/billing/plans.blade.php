@@ -20,6 +20,27 @@
 
     <x-flash />
 
+    @if (session('whatsapp'))
+        {{-- ⚠️ The request is ALREADY FILED by the time this shows. This button
+             only opens WhatsApp on this device with the message prefilled --
+             nothing is sent from the server, and the wording says so, because
+             promising a delivery nobody can guarantee is how a shop ends up
+             waiting on a message that was never sent. --}}
+        <div class="mb-5 flex flex-wrap items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+            <div class="min-w-0 flex-1">
+                <p class="font-semibold text-emerald-900 dark:text-emerald-200">Request saved.</p>
+                <p class="mt-0.5 text-sm text-emerald-800 dark:text-emerald-300/80">
+                    It is already with us. To reach a person faster, send it on WhatsApp too — the
+                    message opens ready to send.
+                </p>
+            </div>
+            <a href="{{ session('whatsapp') }}" target="_blank" rel="noopener"
+               class="btn btn-primary shrink-0">
+                <x-icon name="mail" class="h-4 w-4" /> Send on WhatsApp
+            </a>
+        </div>
+    @endif
+
     <div x-data="{ cycle: '{{ $defaultCycle?->value }}' }">
 
         {{-- ================================ HEADER ================================ --}}
@@ -136,12 +157,26 @@
                             <x-icon name="check" class="h-4 w-4" /> Current plan
                         </span>
                     @else
-                        {{-- No self-serve checkout in this release (#82); the button
-                             opens a message rather than pretending to charge. --}}
-                        <a href="mailto:{{ config('mail.from.address') }}?subject={{ rawurlencode('Plan change request: '.$plan->name) }}&body={{ rawurlencode('Business: '.$business->name.' ('.$business->slug.')'.PHP_EOL.'Requested plan: '.$plan->name) }}"
-                           class="btn btn-primary w-full justify-center">
-                            <x-icon name="mail" class="h-4 w-4" /> Request {{ $plan->name }}
-                        </a>
+                        {{-- No self-serve checkout in this release (#82), so this
+                             files a REQUEST -- it does not move the shop or take
+                             money. It used to be a mailto:, which needed a mail
+                             client on the shopkeeper's device and left no record
+                             anywhere when there wasn't one. --}}
+                        @if ($openRequest?->plan_id === $plan->id)
+                            <span class="btn btn-secondary w-full cursor-default justify-center">
+                                <x-icon name="check" class="h-4 w-4" /> Requested
+                            </span>
+                            <p class="mt-1.5 text-center text-xs text-slate-400">
+                                Asked {{ $openRequest->created_at?->diffForHumans() }} — we will be in touch.
+                            </p>
+                        @else
+                            <form method="POST" action="{{ route('app.billing.plans.request', $plan) }}">
+                                @csrf
+                                <button type="submit" class="btn btn-primary w-full justify-center">
+                                    <x-icon name="arrow-right" class="h-4 w-4" /> Request {{ $plan->name }}
+                                </button>
+                            </form>
+                        @endif
                     @endif
                 </div>
             @endforeach

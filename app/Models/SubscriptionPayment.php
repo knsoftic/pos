@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\PaymentStatus;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\ProtectsFinancialRecords;
+use App\Support\Format;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -69,10 +70,7 @@ class SubscriptionPayment extends Model
 
     public function formattedAmount(): string
     {
-        return ($this->currency === config('subscription.currency')
-                ? config('subscription.currency_symbol')
-                : $this->currency.' ')
-            .number_format((float) $this->amount, (int) config('subscription.currency_decimals'));
+        return Format::billingMoney($this->amount, $this->currency);
     }
 
     /** "bank_transfer" → "Bank Transfer". Methods are config-driven (#190). */

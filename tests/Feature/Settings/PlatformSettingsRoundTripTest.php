@@ -380,19 +380,39 @@ class PlatformSettingsRoundTripTest extends TestCase
         $rules = implode('|', $definition['rules']);
         $max = preg_match('/(?:^|\|)max:(\d+)/', $rules, $m) ? (int) $m[1] : null;
 
-        // A regex rule means the value is going somewhere fussy — a URL, a
-        // query string — so keep to the safest alphabet there is.
-        $restricted = str_contains($rules, 'regex:') || str_contains($rules, 'alpha_dash');
-
         $value = match (true) {
             $definition['type'] === 'bool' => '1',
             str_contains($rules, 'size:3') => 'PKR',
             str_contains($rules, 'email') => 'help@example.test',
             str_contains($rules, 'url') => 'https://example.test',
             $definition['type'] === 'int', $definition['type'] === 'decimal' => (string) min(7, $max ?? 7),
-            $restricted => 'round-trip-'.substr(md5($key), 0, 6),
             default => 'Round Trip '.substr(md5($key), 0, 6),
         };
+
+        /*
+         | A regex rule means the value goes somewhere fussy -- a query string,
+         | a wa.me URL -- and each such field wants a different alphabet. Rather
+         | than keep a list of which is which (a list that goes stale the moment
+         | somebody adds a setting), try candidates against the rule itself and
+         | take the first that satisfies it.
+         */
+        foreach ($definition['rules'] as $rule) {
+            if (! is_string($rule) || ! str_starts_with($rule, 'regex:')) {
+                continue;
+            }
+
+            $pattern = substr($rule, 6);
+
+            foreach (['923001234567', 'round-trip-'.substr(md5($key), 0, 6), $value] as $candidate) {
+                if (preg_match($pattern, $candidate) === 1) {
+                    $value = $candidate;
+
+                    break 2;
+                }
+            }
+
+            $this->fail("No candidate value satisfies the rule on \"{$key}\" -- teach this generator one.");
+        }
 
         return $max !== null && in_array($definition['type'], ['string', 'text'], true)
             ? substr($value, 0, $max)

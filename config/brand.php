@@ -68,6 +68,14 @@ return [
     'support_email' => env('BRAND_SUPPORT_EMAIL', 'support@knsoftic.com'),
     'sales_email' => env('BRAND_SALES_EMAIL', 'sales@knsoftic.com'),
     'support_phone' => env('BRAND_SUPPORT_PHONE', ''),
+
+    /*
+    | Where a shop's plan request lands. Digits only, with the country code and
+    | no leading + -- that is the shape wa.me wants, and a number written any
+    | other way produces a link that opens WhatsApp on an empty chat.
+    | Empty means the WhatsApp route is simply not offered.
+    */
+    'whatsapp' => env('BRAND_WHATSAPP', ''),
     'address' => env('BRAND_ADDRESS', ''),
 
     /*

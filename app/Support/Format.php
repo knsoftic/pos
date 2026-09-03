@@ -53,6 +53,44 @@ class Format
     }
 
     /**
+     * Money in the OPERATOR's currency — what KN Softic charges the shop.
+     *
+     * ⚠️ NOT {@see self::money()}. That one writes what the shop charges ITS
+     * customers, and the two are different settings on purpose: a shop can sell
+     * in rupees while being billed in dollars. Using the wrong one on a billing
+     * screen puts the till's symbol on the operator's invoice.
+     *
+     * `$currency` is the ISO code SNAPSHOTTED onto the row when it was sold. It
+     * is passed rather than looked up because history must not be relabelled: a
+     * payment of USD 39 stays USD 39 after the operator switches to rupees, and
+     * printing "Rs 39" would be wrong by a factor of about three hundred. So —
+     *
+     *   matches today's currency → the symbol,    "Rs 1,000"
+     *   an older currency        → its ISO code,  "USD 39"
+     *   blank or missing         → today's symbol
+     *
+     * ⚠️ That last case is why this exists. Two models each compared the
+     * snapshot against config and, finding an empty string, printed it followed
+     * by a space — so the page showed a bare number with a gap where the money
+     * marker belonged. The figure was right, nothing errored, and the currency
+     * had simply vanished. Old and imported rows really do arrive like that.
+     */
+    public static function billingMoney(float|int|string|null $amount, ?string $currency = null): string
+    {
+        $today = (string) config('subscription.currency', '');
+        $currency = trim((string) $currency);
+
+        $marker = ($currency === '' || $currency === $today)
+            ? (string) config('subscription.currency_symbol', '')
+            : $currency.' ';
+
+        return $marker.number_format(
+            (float) ($amount ?? 0),
+            (int) config('subscription.currency_decimals', 2),
+        );
+    }
+
+    /**
      * A quantity, with the trailing zeros taken off.
      *
      * Stock is stored to four decimals so that 0.35 kg of something is exact,

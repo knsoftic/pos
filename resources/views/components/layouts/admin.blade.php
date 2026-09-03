@@ -10,11 +10,19 @@
     $alerts = $admin ? app(\App\Services\SystemNotificationService::class) : null;
     $alertCount = $alerts?->count() ?? 0;
 
+    // Shops waiting for an answer about a plan (#82). A badge because the whole
+    // point of moving this off a mailto: was that somebody actually sees it --
+    // a request filed into a screen nobody opens is the old bug with a table.
+    $planRequestCount = $admin
+        ? \App\Models\PlanRequest::query()->allTenants()->pending()->count()
+        : 0;
+
     $nav = [
         ['label' => 'Dashboard',     'icon' => 'dashboard',   'href' => route('admin.dashboard'), 'active' => request()->routeIs('admin.dashboard')],
         ['label' => 'Businesses',    'icon' => 'building',    'href' => route('admin.businesses.index'), 'active' => request()->routeIs('admin.businesses.*')],
         ['label' => 'Subscriptions', 'icon' => 'credit-card', 'href' => route('admin.subscriptions.index'), 'active' => request()->routeIs('admin.subscriptions.*')],
         ['label' => 'Plans',         'icon' => 'products',    'href' => route('admin.plans.index'), 'active' => request()->routeIs('admin.plans.*')],
+        ['label' => 'Plan requests', 'icon' => 'note'  ,       'href' => route('admin.plan-requests.index'), 'active' => request()->routeIs('admin.plan-requests.*'), 'badge' => $planRequestCount],
         ['label' => 'Alerts',        'icon' => 'bell',        'href' => route('admin.notifications.index'), 'active' => request()->routeIs('admin.notifications.*'), 'badge' => $alertCount],
         // Phase 3 (#110 operator settings, #180 admin accounts).
         ['label' => 'Admins',        'icon' => 'shield',      'href' => null, 'active' => false],
