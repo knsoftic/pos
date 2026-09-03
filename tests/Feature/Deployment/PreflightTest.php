@@ -49,6 +49,23 @@ class PreflightTest extends TestCase
 
     // ============================================ the seeder split (#191)
 
+    public function test_it_reports_on_the_php_build_before_anything_else(): void
+    {
+        // First line on purpose: when a box is missing a piece of PHP, every
+        // other failure below is downstream noise from that one fact.
+        $this->artisan('pos:preflight')->expectsOutputToContain('PHP build');
+    }
+
+    public function test_it_names_the_binary_it_actually_checked(): void
+    {
+        // ⚠️ The CLI/FPM split is what wastes the afternoon: the website is up,
+        // so the box "obviously" has mbstring — while artisan runs against a
+        // different php.ini, or a different PHP altogether. Whatever this says,
+        // it must be about the binary in hand.
+        $this->assertTrue(function_exists('mb_split'), 'The test runner itself would be dead without it.');
+        $this->assertNotSame('', PHP_BINARY);
+    }
+
     public function test_the_demo_seeder_refuses_to_run_in_production(): void
     {
         $this->seedAsProduction(DemoSeeder::class);

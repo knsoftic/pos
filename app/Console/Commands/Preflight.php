@@ -58,6 +58,7 @@ class Preflight extends Command
     {
         $this->components->info('Preflight — '.config('app.env').' · '.config('app.url'));
 
+        $this->checkPhpBuild();
         $this->checkAppKey();
         $this->checkDebug();
         $this->checkMigrations();
@@ -82,6 +83,96 @@ class Preflight extends Command
     }
 
     // ══════════════════════════════════════════════════════════ the failures
+
+    /**
+     * Does this PHP have the pieces the application needs?
+     *
+     * ⚠️ THE HONEST LIMIT OF THIS CHECK, up front: anything Laravel needs to
+     * BOOT can never be reported here, because artisan will not start to say
+     * it. Lose mbstring and every command — this one included — dies inside
+     * Str::studly() with "Call to undefined function mb_split()", which reads
+     * like a framework bug and is really a php.ini.
+     *
+     * What this catches is the other half, and it is the half that hurts more
+     * because it stays quiet: pieces needed later, by one screen, on one day.
+     * `fileinfo` gone and every product image upload is rejected as the wrong
+     * type. `gd` gone and thumbnails silently stop. `zip` gone and the
+     * spreadsheet import fails on a real customer's catalogue. Each of those
+     * looks like an application bug to whoever hits it.
+     *
+     * ⚠️ AND EXTENSIONS ARE NOT ENOUGH. A panel can load mbstring and still
+     * blacklist individual functions in `disable_functions` — a separate list
+     * for CLI and for FPM, so the website works and the deploy does not. So the
+     * functions are called for by name, not their extension.
+     */
+    protected function checkPhpBuild(): void
+    {
+        // Everything here is used somewhere in this codebase. Nothing is listed
+        // because it is "usually needed".
+        $extensions = [
+            'mbstring' => 'Text handling, everywhere in the framework.',
+            'openssl' => 'HTTPS, hashing, every encrypted column.',
+            'pdo_mysql' => 'The database.',
+            'tokenizer' => 'Blade compiles through it.',
+            'xml' => 'Required by the framework and the PDF writer.',
+            'ctype' => 'Validation.',
+            'json' => 'Settings, audit payloads, API responses.',
+            'bcmath' => 'Money arithmetic that must not drift.',
+            'fileinfo' => 'Reads what an uploaded file REALLY is, rather than trusting its name.',
+            'gd' => 'Product images.',
+            'zip' => 'Spreadsheet import and export.',
+            'curl' => 'Outbound HTTP.',
+            'dom' => 'PDF rendering.',
+        ];
+
+        $missing = [];
+
+        foreach ($extensions as $name => $why) {
+            if (! extension_loaded($name)) {
+                $missing[] = "{$name} ({$why})";
+            }
+        }
+
+        // Functions a panel commonly disables that this application really uses.
+        $functions = [
+            'proc_open' => 'Queue workers and the scheduler.',
+            'proc_close' => 'Same.',
+            'putenv' => 'The framework sets variables through it at boot.',
+            'symlink' => 'php artisan storage:link.',
+            'finfo_open' => 'The real check behind uploaded-file validation.',
+        ];
+
+        $disabled = [];
+
+        foreach ($functions as $name => $why) {
+            if (! function_exists($name)) {
+                $disabled[] = "{$name} ({$why})";
+            }
+        }
+
+        if ($missing === [] && $disabled === []) {
+            $this->record(self::PASS, 'PHP build', count($extensions).' extensions present, nothing this app calls is disabled.');
+
+            return;
+        }
+
+        $detail = [];
+
+        if ($missing !== []) {
+            $detail[] = 'Missing extensions: '.implode(', ', $missing);
+        }
+
+        if ($disabled !== []) {
+            $detail[] = 'Disabled functions: '.implode(', ', $disabled);
+        }
+
+        // ⚠️ Said explicitly because the CLI/FPM split is the part that wastes
+        // an afternoon: the site is up, so the box "obviously" has mbstring.
+        $detail[] = 'This is the CLI build ('.PHP_BINARY.'). The web server may use a different php.ini, '
+            .'so fix the one this path points at — and check the other.';
+
+        $this->record(self::FAIL, 'PHP build', implode(' · ', $detail));
+    }
 
     protected function checkAppKey(): void
     {
