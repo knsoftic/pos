@@ -27,10 +27,15 @@ return [
     | business's own POS currency (#58, Phase 11) — a tenant can sell in PKR
     | while being billed in USD. Snapshotted onto every subscription/payment
     | row so historical records never change when this default changes.
+    |
+    | The shipped plan catalogue is priced in rupees, so the default matches it.
+    | Changing this RELABELS the numbers, it does not convert them -- set it, and
+    | the plan prices, together or not at all.
     */
-    'currency' => env('SUBSCRIPTION_CURRENCY', 'USD'),
-    'currency_symbol' => env('SUBSCRIPTION_CURRENCY_SYMBOL', '$'),
-    'currency_decimals' => (int) env('SUBSCRIPTION_CURRENCY_DECIMALS', 2),
+    'currency' => env('SUBSCRIPTION_CURRENCY', 'PKR'),
+    'currency_symbol' => env('SUBSCRIPTION_CURRENCY_SYMBOL', 'Rs'),
+    // Nobody quotes a subscription in paisa.
+    'currency_decimals' => (int) env('SUBSCRIPTION_CURRENCY_DECIMALS', 0),
 
     /*
     | Fallback trial length, used when a plan has no trial_days of its own (#81).

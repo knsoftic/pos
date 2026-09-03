@@ -133,6 +133,12 @@ class PublicSiteTest extends TestCase
 
     // ============================================== pricing is the plans (#108)
 
+    /** A price as the pricing page prints it, at whatever decimals are set. */
+    protected function asPriced(float $amount): string
+    {
+        return number_format($amount, (int) config('subscription.currency_decimals', 2));
+    }
+
     public function test_pricing_is_built_from_the_plans_that_exist(): void
     {
         $this->plan('Starter', 15);
@@ -142,8 +148,11 @@ class PublicSiteTest extends TestCase
             ->assertOk()
             ->assertSee('Starter')
             ->assertSee('Professional')
-            ->assertSee('15.00')
-            ->assertSee('39.00');
+            // Formatted the way the page formats it: the operator's decimal
+            // setting is theirs to change, and a test that hardcodes "15.00"
+            // fails on a currency nobody quotes in fractions.
+            ->assertSee($this->asPriced(15))
+            ->assertSee($this->asPriced(39));
     }
 
     public function test_a_private_or_inactive_plan_never_reaches_the_website(): void
@@ -176,7 +185,7 @@ class PublicSiteTest extends TestCase
 
         $response = $this->get(route('pricing'))->assertOk();
 
-        $response->assertSee('150.00');
+        $response->assertSee($this->asPriced(150));
         // Better than quoting a number nobody can be charged.
         $response->assertSee('Not sold yearly');
 
