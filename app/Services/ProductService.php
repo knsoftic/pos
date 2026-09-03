@@ -407,10 +407,25 @@ class ProductService
      * A supplied barcode is honoured; `generate` mints an EAN-13 in the
      * in-store range (#27). Returns null when neither was asked for — plenty of
      * products never carry a barcode.
+     *
+     * ⚠️ AN EXPLICIT `generate` BEATS A SUPPLIED CODE, and it has to.
+     *
+     * The edit form arrives with the barcode box ALREADY FILLED with whatever
+     * the product carries. So "keep this code" and "here is a code I just
+     * typed" look identical on the wire — both are simply a non-empty field.
+     *
+     * Ticking the box used to lose that argument, which made it do nothing at
+     * all on any product that already had a code. A shop with a supplier's
+     * unprintable barcode would tick "Generate one for me", save, see the same
+     * code, and print another label with no bars on it — with no hint that the
+     * checkbox had been ignored.
+     *
+     * The tick is off by default and can only be set deliberately, so it is the
+     * clearer statement of intent. It wins, and the form says so.
      */
     public function allocateBarcode(?string $requested, bool $generate = false, ?int $ignoreProductId = null, ?int $ignoreVariantId = null): ?string
     {
-        $requested = $requested !== null ? trim($requested) : null;
+        $requested = $generate ? null : ($requested !== null ? trim($requested) : null);
 
         if ($requested !== null && $requested !== '') {
             abort_if(

@@ -232,7 +232,13 @@
                 <label class="mt-2 flex cursor-pointer items-center gap-2">
                     <input type="checkbox" name="generate_barcode" value="1" @checked(old('generate_barcode'))
                            class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800" />
-                    <span class="text-xs text-slate-500 dark:text-slate-400">Generate one for me (in-store EAN-13)</span>
+                    <span class="text-xs text-slate-500 dark:text-slate-400">
+                        Generate one for me (in-store EAN-13)
+                        {{-- Said plainly: the box above is pre-filled on an edit, so
+                             "replaces" is the difference between a checkbox that
+                             works and one that silently does nothing. --}}
+                        <span class="block text-slate-400">Replaces whatever is in the box above. Only an EAN-13 can be printed as bars.</span>
+                    </span>
                 </label>
             </div>
 

@@ -173,6 +173,128 @@ class CatalogToolsTest extends TestCase
         $this->assertSame(3, substr_count($response->getContent(), '<div class="label">'));
     }
 
+    public function test_ticking_generate_replaces_a_code_that_cannot_be_drawn(): void
+    {
+        /*
+         | ⚠️ "Barcode mein lines show nahi ho rahi."
+         |
+         | Only a valid EAN-13 can be drawn as bars. A supplier's own code, a
+         | 12-digit UPC, anything hand-typed -- none of those can, so the label
+         | prints the number alone. That part is deliberate: bars that scan as
+         | some OTHER product are far worse than no bars.
+         |
+         | The trap is the way out. The edit form arrives with the barcode field
+         | ALREADY FILLED with the existing code, so ticking "Generate one for
+         | me" used to do nothing at all -- the pre-filled value counted as a
+         | request and won. The checkbox said one thing and did another, and the
+         | shop was left with a label that never grows bars however many times
+         | they ask for one.
+         |
+         | An explicit tick is an instruction. It wins.
+         */
+        $this->setUpBusiness();
+
+        $product = app(ProductService::class)->create([
+            'name' => 'Imported Biscuits', 'type' => ProductType::Standard->value,
+            'selling_price' => 120, 'barcode' => 'SUPPLIER-77',
+        ]);
+
+        $this->assertSame('', Ean13::svg($product->barcode), 'A supplier code cannot be drawn — that is the premise.');
+
+        // Exactly what the edit form posts: the old code still in the box,
+        // plus the box ticked.
+        app(ProductService::class)->update($product, [
+            'name' => 'Imported Biscuits',
+            'type' => ProductType::Standard->value,
+            'selling_price' => 120,
+            'barcode' => 'SUPPLIER-77',
+            'generate_barcode' => true,
+        ]);
+
+        $product->refresh();
+
+        $this->assertNotSame('SUPPLIER-77', $product->barcode);
+        $this->assertTrue(Ean13::isValid($product->barcode));
+        $this->assertNotSame('', Ean13::svg($product->barcode), 'Now it draws.');
+    }
+
+    public function test_the_sheet_says_which_labels_will_have_no_bars(): void
+    {
+        /*
+         | Without this the page gives no reason at all: half the labels come
+         | out with bars and half with a bare number, and the only thing anybody
+         | can report is "barcode mein lines nahi aa rahi".
+         |
+         | The reason is that only a valid EAN-13 can be drawn. Inventing bars
+         | for a supplier's own code would produce a label that scans as some
+         | OTHER product -- worse than printing none.
+         */
+        $this->setUpBusiness();
+
+        $drawable = app(ProductService::class)->create([
+            'name' => 'Cola 500ml', 'type' => ProductType::Standard->value,
+            'selling_price' => 70, 'generate_barcode' => true,
+        ]);
+
+        $plain = app(ProductService::class)->create([
+            'name' => 'Imported Biscuits', 'type' => ProductType::Standard->value,
+            'selling_price' => 120, 'barcode' => 'SUPPLIER-77',
+        ]);
+
+        $html = $this->actingAs($this->owner)->post(route('app.products.labels.sheet'), [
+            'labels' => [$drawable->id => 2, $plain->id => 2],
+        ])->assertOk()->getContent();
+
+        $this->assertStringContainsString('1 product will print without bars', $html);
+        $this->assertStringContainsString('Imported Biscuits', $html);
+
+        // ⚠️ On the SCREEN only. A label goes onto a tin of ghee; an
+        // explanation printed on it would be nonsense on a shelf.
+        $this->assertStringContainsString('.notice { display: none; }', $html);
+    }
+
+    public function test_a_sheet_where_everything_draws_says_nothing(): void
+    {
+        // A warning that appears when there is nothing wrong is a warning
+        // people stop reading.
+        $this->setUpBusiness();
+
+        $product = app(ProductService::class)->create([
+            'name' => 'Cola 500ml', 'type' => ProductType::Standard->value,
+            'selling_price' => 70, 'generate_barcode' => true,
+        ]);
+
+        $html = $this->actingAs($this->owner)->post(route('app.products.labels.sheet'), [
+            'labels' => [$product->id => 2],
+        ])->assertOk()->getContent();
+
+        $this->assertStringNotContainsString('will print without bars', $html);
+    }
+
+    public function test_a_typed_barcode_is_still_kept_when_generate_is_not_asked_for(): void
+    {
+        // The tick is the only thing that overrides a typed code. Untouched,
+        // a supplier's barcode stays exactly as it is — it is the number on
+        // the box, and the shop scans the real one.
+        $this->setUpBusiness();
+
+        $product = app(ProductService::class)->create([
+            'name' => 'Imported Biscuits', 'type' => ProductType::Standard->value,
+            'selling_price' => 120, 'barcode' => '5901234123457',
+        ]);
+
+        $this->assertSame('5901234123457', $product->barcode);
+
+        app(ProductService::class)->update($product, [
+            'name' => 'Imported Biscuits',
+            'type' => ProductType::Standard->value,
+            'selling_price' => 120,
+            'barcode' => '5901234123457',
+        ]);
+
+        $this->assertSame('5901234123457', $product->fresh()->barcode);
+    }
+
     public function test_pressing_print_with_nothing_typed_is_not_an_error(): void
     {
         /*
