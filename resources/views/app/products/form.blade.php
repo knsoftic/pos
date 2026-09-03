@@ -10,6 +10,7 @@
 
 @php
     use App\Enums\ProductType;
+    use App\Support\PermissionRegistry;
 
     // Existing variants, or one blank row so a new variable product has
     // something to fill in.
@@ -90,6 +91,20 @@
                         </option>
                     @endforeach
                 </select>
+                @if ($categories->isEmpty())
+                    {{-- An empty <select> looks exactly like a broken one, and the
+                         screen that fills it is a tab on ANOTHER page — so from
+                         here there was no road at all. The link is the fix. --}}
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        No categories yet.
+                        @can(PermissionRegistry::CATALOG_MANAGE)
+                            <a href="{{ route('app.categories.create') }}" class="text-brand-600 underline hover:no-underline dark:text-brand-400">Add one</a>
+                            — you can file this product later.
+                        @else
+                            Ask the owner to add some.
+                        @endcan
+                    </p>
+                @endif
             </div>
 
             <div>
@@ -102,6 +117,17 @@
                         <option value="{{ $brand->id }}" @selected((int) old('brand_id', $product->brand_id) === $brand->id)>{{ $brand->name }}</option>
                     @endforeach
                 </select>
+                @if ($brands->isEmpty())
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        No brands yet.
+                        @can(PermissionRegistry::CATALOG_MANAGE)
+                            <a href="{{ route('app.brands.create') }}" class="text-brand-600 underline hover:no-underline dark:text-brand-400">Add one</a>
+                            — or leave this blank, most shops do.
+                        @else
+                            Ask the owner to add some.
+                        @endcan
+                    </p>
+                @endif
             </div>
 
             <div x-show="type !== '{{ ProductType::Service->value }}'" x-cloak>
@@ -116,6 +142,19 @@
                         </option>
                     @endforeach
                 </select>
+                @if ($units->isEmpty())
+                    {{-- Same dead end as the two above. Leaving one of the three
+                         silent would read as a bug in that one. --}}
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        No units yet.
+                        @can(PermissionRegistry::CATALOG_MANAGE)
+                            <a href="{{ route('app.units.create') }}" class="text-brand-600 underline hover:no-underline dark:text-brand-400">Add one</a>
+                            — needed only if you sell by weight or length.
+                        @else
+                            Ask the owner to add some.
+                        @endcan
+                    </p>
+                @endif
             </div>
 
             <div class="md:col-span-2">
